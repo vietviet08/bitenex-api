@@ -1,0 +1,68 @@
+# =============================================================================
+# User Module - Pydantic Schemas
+# =============================================================================
+
+from datetime import datetime
+
+from pydantic import EmailStr, Field
+
+from app.shared.dto import BaseDTO, TimestampMixin
+from app.shared.enums import Role
+
+
+class UserBase(BaseDTO):
+    """Base user fields."""
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
+
+
+class UserCreate(UserBase):
+    """Create user request."""
+    password: str = Field(min_length=8, max_length=128)
+    role: Role = Role.USER
+
+
+class UserUpdate(BaseDTO):
+    """Update user request."""
+    full_name: str | None = Field(default=None, min_length=2, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
+    avatar_url: str | None = None
+
+
+class UserResponse(UserBase, TimestampMixin):
+    """User response."""
+    id: str
+    role: Role
+    is_active: bool
+    is_verified: bool
+    avatar_url: str | None = None
+
+
+class UserListResponse(BaseDTO):
+    """Paginated user list."""
+    items: list[UserResponse]
+    total: int
+
+
+class AddressBase(BaseDTO):
+    """Base address fields."""
+    label: str = Field(max_length=50)
+    address_line1: str = Field(max_length=255)
+    address_line2: str | None = Field(default=None, max_length=255)
+    city: str = Field(max_length=100)
+    postal_code: str | None = Field(default=None, max_length=20)
+    latitude: float | None = None
+    longitude: float | None = None
+    is_default: bool = False
+
+
+class AddressCreate(AddressBase):
+    """Create address request."""
+    pass
+
+
+class AddressResponse(AddressBase, TimestampMixin):
+    """Address response."""
+    id: str
+    user_id: str
