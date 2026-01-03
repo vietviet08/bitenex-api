@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan event handler."""
     # Startup
     logger.info("Starting Bitenex API...")
-    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Environment: {settings.app_env}")
     logger.info(f"Debug mode: {settings.debug}")
     
     # TODO: Initialize Redis connection
@@ -73,8 +73,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # FastAPI Application
 # =============================================================================
 app = FastAPI(
-    title=settings.project_name,
-    version=settings.version,
+    title=settings.app_name,
+    version=settings.api_version,
     description="Bitenex Food Delivery Platform API",
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
@@ -168,8 +168,8 @@ app.include_router(admin_router, prefix=API_V1_PREFIX)
 async def root():
     """Root endpoint."""
     return {
-        "name": settings.project_name,
-        "version": settings.version,
+        "name": settings.app_name,
+        "version": settings.api_version,
         "status": "running",
     }
 
@@ -179,7 +179,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": settings.version,
+        "version": settings.api_version,
     }
 
 

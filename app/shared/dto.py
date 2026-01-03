@@ -107,7 +107,7 @@ class PaginationParams(BaseDTO):
 # =============================================================================
 # Timestamp Mixins
 # =============================================================================
-class TimestampMixin(BaseDTO):
+class TimestampMixin():
     """Mixin for created/updated timestamps."""
     created_at: datetime
     updated_at: datetime

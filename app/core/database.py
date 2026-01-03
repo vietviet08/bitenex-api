@@ -41,8 +41,8 @@ NAMING_CONVENTION = {
 # =============================================================================
 # Create async engine with connection pooling
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DATABASE_ECHO,
+    settings.database_url,
+    echo=settings.database_echo,
     pool_pre_ping=True,  # Check connection health before use
     pool_size=10,
     max_overflow=20,
