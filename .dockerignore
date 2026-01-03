@@ -1,0 +1,76 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info
+dist
+build
+eggs
+.eggs
+lib
+lib64
+parts
+sdist
+var
+wheels
+*.manifest
+*.spec
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.nox
+
+# Type checking
+.mypy_cache
+
+# Documentation
+docs/_build
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Logs
+*.log
+logs/
+
+# Local development
+.env.local
+.env.*.local
+
+# Alembic (keep versions)
+# alembic/versions/*.pyc
+
+# Misc
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+README.md
+LICENSE
+Makefile
