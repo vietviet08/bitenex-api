@@ -15,10 +15,6 @@ from app.main import app
 from app.core.database import Base, get_db
 
 
-# =============================================================================
-# Test Database Setup
-# =============================================================================
-# Use SQLite for testing (in-memory)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(
@@ -33,9 +29,6 @@ TestSessionLocal = async_sessionmaker(
 )
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     """Create event loop for async tests."""
@@ -80,9 +73,6 @@ def sync_client() -> Generator[TestClient, None, None]:
         yield c
 
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
 def create_test_token(user_id: str, role: str = "USER") -> str:
     """Create a JWT token for testing."""
     from app.core.security import create_access_token

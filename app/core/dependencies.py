@@ -1,15 +1,3 @@
-# =============================================================================
-# Dependency Injection - Authentication & Authorization
-# =============================================================================
-# This module provides FastAPI dependencies for authentication and
-# role-based access control.
-#
-# Architectural Intent:
-# - Centralized authentication logic
-# - Declarative role-based authorization
-# - Composable dependencies for different access levels
-# =============================================================================
-
 from typing import Annotated
 
 from fastapi import Depends, Header
@@ -20,16 +8,9 @@ from app.core.security import verify_access_token
 from app.shared.enums import Role
 
 
-# =============================================================================
-# Security Scheme
-# =============================================================================
-# OAuth2 Bearer token authentication
 security = HTTPBearer(auto_error=False)
 
 
-# =============================================================================
-# Token Payload Data Class
-# =============================================================================
 class TokenPayload:
     """
     Represents the decoded JWT token payload.
@@ -48,9 +29,6 @@ class TokenPayload:
         return f"TokenPayload(user_id={self.user_id}, role={self.role})"
 
 
-# =============================================================================
-# Authentication Dependency
-# =============================================================================
 async def get_current_user(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,
@@ -83,13 +61,9 @@ async def get_current_user(
     return TokenPayload(user_id=user_id, role=role)
 
 
-# Type alias for dependency injection
 CurrentUser = Annotated[TokenPayload, Depends(get_current_user)]
 
 
-# =============================================================================
-# Role-Based Authorization Dependencies
-# =============================================================================
 class RoleChecker:
     """
     Dependency factory for role-based access control.
@@ -145,10 +119,6 @@ def require_role(*roles: Role) -> RoleChecker:
     return RoleChecker(*roles)
 
 
-# =============================================================================
-# Pre-configured Role Dependencies
-# =============================================================================
-# These can be used directly in route decorators for common patterns
 
 RequireAdmin = Depends(require_role(Role.ADMIN))
 RequireMerchant = Depends(require_role(Role.MERCHANT, Role.ADMIN))
@@ -156,9 +126,6 @@ RequireDriver = Depends(require_role(Role.DRIVER, Role.ADMIN))
 RequireUser = Depends(require_role(Role.USER, Role.ADMIN))
 
 
-# =============================================================================
-# Optional Authentication
-# =============================================================================
 async def get_current_user_optional(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,

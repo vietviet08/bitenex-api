@@ -2,7 +2,7 @@
 # Core Module Exports
 # =============================================================================
 
-from app.core.config import settings, get_settings
+from app.core.config import get_settings
 from app.core.database import Base, get_db, async_session_maker, engine
 from app.core.dependencies import (
     CurrentUser,

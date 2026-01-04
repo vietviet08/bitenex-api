@@ -1,15 +1,3 @@
-# =============================================================================
-# Custom Exception Hierarchy
-# =============================================================================
-# This module defines the application's exception hierarchy.
-# All custom exceptions should inherit from BitenexException.
-#
-# Architectural Intent:
-# - Consistent error handling across the application
-# - HTTP status code mapping for API responses
-# - Structured error messages for debugging
-# =============================================================================
-
 from typing import Any
 
 
@@ -51,9 +39,6 @@ class BitenexException(Exception):
         }
 
 
-# =============================================================================
-# Authentication Exceptions (401)
-# =============================================================================
 class AuthenticationError(BitenexException):
     """Raised when authentication fails."""
     message = "Authentication failed"
@@ -73,9 +58,6 @@ class InvalidTokenError(AuthenticationError):
     code = "INVALID_TOKEN"
 
 
-# =============================================================================
-# Authorization Exceptions (403)
-# =============================================================================
 class AuthorizationError(BitenexException):
     """Raised when user lacks required permissions."""
     message = "You don't have permission to perform this action"
@@ -89,9 +71,6 @@ class InsufficientRoleError(AuthorizationError):
     code = "INSUFFICIENT_ROLE"
 
 
-# =============================================================================
-# Resource Exceptions (404, 409)
-# =============================================================================
 class NotFoundError(BitenexException):
     """Raised when a requested resource is not found."""
     message = "Resource not found"
@@ -112,9 +91,6 @@ class DuplicateError(ConflictError):
     code = "DUPLICATE"
 
 
-# =============================================================================
-# Validation Exceptions (400, 422)
-# =============================================================================
 class ValidationError(BitenexException):
     """Raised when input validation fails."""
     message = "Validation error"
@@ -129,9 +105,6 @@ class BadRequestError(BitenexException):
     status_code = 400
 
 
-# =============================================================================
-# Business Logic Exceptions
-# =============================================================================
 class BusinessError(BitenexException):
     """Base exception for business logic errors."""
     message = "Business rule violation"
@@ -154,9 +127,6 @@ class DispatchError(BusinessError):
     code = "DISPATCH_ERROR"
 
 
-# =============================================================================
-# External Service Exceptions
-# =============================================================================
 class ExternalServiceError(BitenexException):
     """Raised when an external service fails."""
     message = "External service error"

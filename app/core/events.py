@@ -1,18 +1,3 @@
-# =============================================================================
-# Internal Event Dispatcher (Pub/Sub Pattern)
-# =============================================================================
-# This module provides a simple in-process event dispatcher for
-# decoupling business logic using the pub/sub pattern.
-#
-# Architectural Intent:
-# - Decouple modules through events instead of direct calls
-# - Enable reactive patterns within the application
-# - Foundation for future distributed event system
-#
-# Note: This is an in-memory implementation. For production distributed
-# systems, consider Redis Pub/Sub, RabbitMQ, or Kafka.
-# =============================================================================
-
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -21,9 +6,6 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 
-# =============================================================================
-# Event Base Class
-# =============================================================================
 @dataclass
 class Event:
     """
@@ -43,10 +25,6 @@ class Event:
         return self.__class__.__name__
 
 
-# =============================================================================
-# Example Event Definitions
-# =============================================================================
-# These are placeholder events - actual events will be defined per module
 
 @dataclass
 class OrderCreatedEvent(Event):
@@ -80,15 +58,9 @@ class DriverAssignedEvent(Event):
     driver_id: str = ""
 
 
-# =============================================================================
-# Event Handler Type
-# =============================================================================
 EventHandler = Callable[[Event], Awaitable[None]]
 
 
-# =============================================================================
-# Event Dispatcher (Singleton)
-# =============================================================================
 class EventDispatcher:
     """
     In-process event dispatcher implementing the pub/sub pattern.
@@ -198,16 +170,9 @@ class EventDispatcher:
         self._handlers.clear()
 
 
-# =============================================================================
-# Global Dispatcher Instance
-# =============================================================================
-# Singleton pattern for application-wide event dispatching
 dispatcher = EventDispatcher()
 
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
 async def emit_event(event: Event) -> None:
     """Convenience function to emit events using the global dispatcher."""
     await dispatcher.emit(event)

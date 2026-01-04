@@ -1,7 +1,3 @@
-# =============================================================================
-# Realtime Module - WebSocket Connection Manager
-# =============================================================================
-
 from typing import Any
 import logging
 
@@ -78,9 +74,6 @@ class ConnectionManager:
         for user_id in self._connections:
             await self.send_personal(user_id, message)
     
-    # =========================================================================
-    # Room Management
-    # =========================================================================
     def join_room(self, user_id: str, room: str) -> None:
         """Add user to a room."""
         if room not in self._rooms:
@@ -110,9 +103,6 @@ class ConnectionManager:
             if user_id != exclude_user:
                 await self.send_personal(user_id, message)
     
-    # =========================================================================
-    # Utility Methods
-    # =========================================================================
     def is_connected(self, user_id: str) -> bool:
         """Check if a user is connected."""
         return user_id in self._connections

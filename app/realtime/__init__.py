@@ -1,7 +1,3 @@
-# =============================================================================
-# Realtime Module Exports
-# =============================================================================
-
 from app.realtime.socket_manager import ConnectionManager, connection_manager
 from app.realtime.events import (
     RealtimeEventType,

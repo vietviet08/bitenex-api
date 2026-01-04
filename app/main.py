@@ -1,19 +1,12 @@
-# =============================================================================
-# Bitenex API - Main Application Entry Point
-# =============================================================================
-# FastAPI application with router mounting, lifespan events, and middleware.
-# Run with: uvicorn app.main:app --reload
-# =============================================================================
-
 from contextlib import asynccontextmanager
 import logging
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.core.config import settings
+from app.core.config import Settings, get_settings
 from app.core.database import engine
 from app.core.exceptions import BitenexException
 
@@ -28,10 +21,8 @@ from app.modules.payment import router as payment_router
 from app.modules.notification import router as notification_router
 from app.modules.admin import router as admin_router
 
+settings = get_settings()
 
-# =============================================================================
-# Logging Configuration
-# =============================================================================
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -40,9 +31,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Lifespan Events
-# =============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan event handler."""
@@ -69,9 +57,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Shutdown complete")
 
 
-# =============================================================================
-# FastAPI Application
-# =============================================================================
 app = FastAPI(
     title=settings.app_name,
     version=settings.api_version,
@@ -83,10 +68,6 @@ app = FastAPI(
 )
 
 
-# =============================================================================
-# Middleware
-# =============================================================================
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -105,9 +86,6 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# =============================================================================
-# Exception Handlers
-# =============================================================================
 @app.exception_handler(BitenexException)
 async def bitenex_exception_handler(
     request: Request,
@@ -144,9 +122,6 @@ async def general_exception_handler(
     )
 
 
-# =============================================================================
-# Router Registration
-# =============================================================================
 API_V1_PREFIX = "/api/v1"
 
 # Core routers
@@ -161,11 +136,8 @@ app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
 
 
-# =============================================================================
-# Health Check Endpoints
-# =============================================================================
 @app.get("/", tags=["Root"])
-async def root():
+async def root(settings: Settings = Depends(get_settings)):
     """Root endpoint."""
     return {
         "name": settings.app_name,

@@ -1,15 +1,3 @@
-# =============================================================================
-# Base ORM Model
-# =============================================================================
-# This module provides the base model class that all ORM models should inherit.
-# Includes common fields like timestamps and soft delete.
-#
-# Architectural Intent:
-# - Consistent model structure across all modules
-# - Automatic timestamp management
-# - Soft delete support for data retention
-# =============================================================================
-
 from datetime import datetime
 from typing import Any
 from uuid import uuid4

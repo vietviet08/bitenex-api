@@ -1,10 +1,3 @@
-# =============================================================================
-# Notification Worker
-# =============================================================================
-# Background worker for sending notifications.
-# Handles push, email, and SMS notifications asynchronously.
-# =============================================================================
-
 import asyncio
 import logging
 from typing import Any

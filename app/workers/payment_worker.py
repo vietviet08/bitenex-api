@@ -1,10 +1,3 @@
-# =============================================================================
-# Payment Worker
-# =============================================================================
-# Background worker for processing payment-related tasks.
-# Uses asyncio for async processing.
-# =============================================================================
-
 import asyncio
 import logging
 from abc import ABC, abstractmethod

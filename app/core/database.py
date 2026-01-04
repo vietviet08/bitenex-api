@@ -1,15 +1,3 @@
-# =============================================================================
-# Async Database Configuration (SQLAlchemy 2.0)
-# =============================================================================
-# This module provides async database connectivity using SQLAlchemy 2.0
-# with the asyncpg driver for PostgreSQL.
-#
-# Architectural Intent:
-# - Async-first database operations for high concurrency
-# - Session dependency injection pattern
-# - Clean separation of engine and session management
-# =============================================================================
-
 from typing import AsyncGenerator
 
 from sqlalchemy import MetaData
@@ -20,13 +8,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from app.core.config import settings
+from app.core.config import get_settings
 
+settings = get_settings()
 
-# =============================================================================
-# Naming Convention for Constraints
-# =============================================================================
-# Consistent naming makes migrations and debugging easier
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -36,10 +21,6 @@ NAMING_CONVENTION = {
 }
 
 
-# =============================================================================
-# Async Engine Configuration
-# =============================================================================
-# Create async engine with connection pooling
 engine = create_async_engine(
     settings.database_url,
     echo=settings.database_echo,
@@ -49,10 +30,6 @@ engine = create_async_engine(
 )
 
 
-# =============================================================================
-# Session Factory
-# =============================================================================
-# Creates new async sessions for each request
 async_session_maker = async_sessionmaker(
     engine,
     class_=AsyncSession,
@@ -62,9 +39,6 @@ async_session_maker = async_sessionmaker(
 )
 
 
-# =============================================================================
-# Declarative Base for ORM Models
-# =============================================================================
 class Base(DeclarativeBase):
     """
     Base class for all ORM models.
@@ -74,9 +48,6 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-# =============================================================================
-# Database Session Dependency
-# =============================================================================
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency that provides a database session.
@@ -98,9 +69,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-# =============================================================================
-# Database Lifecycle Functions
-# =============================================================================
 async def init_db() -> None:
     """
     Initialize database - create tables if they don't exist.

@@ -1,15 +1,3 @@
-# =============================================================================
-# Core Configuration Module
-# =============================================================================
-# This module centralizes all application settings using Pydantic Settings.
-# All configuration is loaded from environment variables with sensible defaults.
-# 
-# Architectural Intent:
-# - Single source of truth for all configuration
-# - Type-safe configuration with validation
-# - Environment-based configuration (12-factor app)
-# =============================================================================
-
 from functools import lru_cache
 from typing import List
 
@@ -29,45 +17,27 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    # -------------------------------------------------------------------------
-    # Application Settings
-    # -------------------------------------------------------------------------
     app_name: str = "Bitenex API"
-    app_env: str = "development"  # development | staging | production
+    app_env: str = "dev"  # dev | stg | prod
     debug: bool = True
     api_version: str = "v1"
     secret_key: str = "change-this-in-production"
 
-    # -------------------------------------------------------------------------
-    # Database Settings (PostgreSQL + AsyncPG)
-    # -------------------------------------------------------------------------
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/bitenex"
-    database_echo: bool = False  # SQL query logging
+    database_echo: bool = True
 
-    # -------------------------------------------------------------------------
-    # Redis Settings
-    # -------------------------------------------------------------------------
     redis_url: str = "redis://localhost:6379/0"
 
-    # -------------------------------------------------------------------------
-    # JWT Authentication Settings
-    # -------------------------------------------------------------------------
     jwt_secret_key: str = "jwt-secret-change-in-production"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
-    # -------------------------------------------------------------------------
-    # CORS Settings
-    # -------------------------------------------------------------------------
     cors_origins: List[str] = [
         "http://localhost:3000",
         "http://localhost:8080",
     ]
 
-    # -------------------------------------------------------------------------
-    # WebSocket Settings
-    # -------------------------------------------------------------------------
     ws_message_queue_size: int = 100
 
     @field_validator("cors_origins", mode="before")
@@ -87,12 +57,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""
-        return self.APP_ENV == "production"
+        return self.app_env == "prod"
     
     @property
     def is_development(self) -> bool:
         """Check if running in development environment."""
-        return self.APP_ENV == "development"
+        return self.app_env == "dev"
 
 
 @lru_cache
@@ -102,7 +72,3 @@ def get_settings() -> Settings:
     Using lru_cache ensures settings are only loaded once.
     """
     return Settings()
-
-
-# Export singleton for convenience
-settings = get_settings()

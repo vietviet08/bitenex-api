@@ -1,15 +1,3 @@
-# =============================================================================
-# Shared Enums
-# =============================================================================
-# This module contains all shared enumerations used across modules.
-# Centralizing enums prevents circular imports and ensures consistency.
-#
-# Architectural Intent:
-# - Single source of truth for all enum values
-# - Type-safe constants throughout the application
-# - Easy serialization for API responses
-# =============================================================================
-
 from enum import Enum
 
 

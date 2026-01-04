@@ -1,36 +1,17 @@
-# =============================================================================
-# Security Module - JWT & Password Hashing
-# =============================================================================
-# This module provides security infrastructure for authentication.
-# It handles JWT token creation/validation and password hashing.
-#
-# Architectural Intent:
-# - Centralized security utilities
-# - Stateless JWT authentication
-# - Secure password hashing with bcrypt
-# - Support for both access and refresh tokens
-# =============================================================================
-
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from app.core.config import settings
+from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError, TokenExpiredError
 
+settings = get_settings()
 
-# =============================================================================
-# Password Hashing Configuration
-# =============================================================================
-# Using bcrypt for password hashing - industry standard
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# =============================================================================
-# Password Utilities
-# =============================================================================
 def hash_password(password: str) -> str:
     """
     Hash a plain text password.
@@ -58,18 +39,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# =============================================================================
-# JWT Token Types
-# =============================================================================
 class TokenType:
     """Token type constants for JWT claims."""
     ACCESS = "access"
     REFRESH = "refresh"
 
 
-# =============================================================================
-# JWT Token Creation
-# =============================================================================
 def create_access_token(
     user_id: str,
     role: str,
@@ -96,7 +71,7 @@ def create_access_token(
         Encoded JWT token string
     """
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = now + timedelta(minutes=settings.access_token_expire_minutes)
     
     payload = {
         "sub": user_id,
@@ -111,8 +86,8 @@ def create_access_token(
     
     return jwt.encode(
         payload,
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
     )
 
 
@@ -128,7 +103,7 @@ def create_refresh_token(user_id: str, role: str) -> str:
         Encoded JWT refresh token string
     """
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = now + timedelta(days=settings.refresh_token_expire_days)
     
     payload = {
         "sub": user_id,
@@ -140,8 +115,8 @@ def create_refresh_token(user_id: str, role: str) -> str:
     
     return jwt.encode(
         payload,
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
     )
 
 
@@ -163,9 +138,6 @@ def create_token_pair(user_id: str, role: str) -> dict[str, str]:
     }
 
 
-# =============================================================================
-# JWT Token Validation
-# =============================================================================
 def decode_token(token: str) -> dict[str, Any]:
     """
     Decode and validate a JWT token.
@@ -183,8 +155,8 @@ def decode_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
         )
         return payload
     except jwt.ExpiredSignatureError:

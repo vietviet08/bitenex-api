@@ -1,7 +1,3 @@
-# =============================================================================
-# Alembic Environment Configuration
-# =============================================================================
-
 import asyncio
 from logging.config import fileConfig
 
@@ -11,11 +7,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Import your models' Base and settings
 from app.core.database import Base
-from app.core.config import settings
+# from app.core.config import settings
 
-# Import all models to ensure they are registered with Base.metadata
 from app.modules.base import BaseModel
 from app.modules.auth.models import RefreshToken, TokenBlacklist
 from app.modules.user.models import User, UserAddress
@@ -26,19 +20,17 @@ from app.modules.dispatch.models import DispatchAssignment, DispatchConfig
 from app.modules.payment.models import Payment, Refund, PaymentMethod
 from app.modules.notification.models import Notification, DeviceToken, NotificationPreference
 from app.modules.admin.models import AdminAuditLog, SystemConfig
+from app.core.config import get_settings
 
+settings = get_settings()
 
-# this is the Alembic Config object
 config = context.config
 
-# Override sqlalchemy.url with our settings
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
 
-# Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
 
 
@@ -78,7 +70,6 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
 
     """
-    # Use asyncpg for async migrations
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = settings.database_url
     

@@ -1,24 +1,9 @@
-# =============================================================================
-# Shared Data Transfer Objects (DTOs)
-# =============================================================================
-# This module provides base classes for request/response schemas.
-# All module-specific schemas should inherit from these base classes.
-#
-# Architectural Intent:
-# - Consistent API response structure
-# - Shared validation patterns
-# - Easy serialization configuration
-# =============================================================================
-
 from datetime import datetime
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# =============================================================================
-# Base Schema Configuration
-# =============================================================================
 class BaseDTO(BaseModel):
     """
     Base class for all DTOs with common configuration.
@@ -32,9 +17,6 @@ class BaseDTO(BaseModel):
     )
 
 
-# =============================================================================
-# Common Response Schemas
-# =============================================================================
 class MessageResponse(BaseDTO):
     """Simple message response."""
     message: str
@@ -58,9 +40,6 @@ class ErrorResponse(BaseDTO):
     error: ErrorDetail
 
 
-# =============================================================================
-# Pagination
-# =============================================================================
 T = TypeVar("T")
 
 
@@ -104,9 +83,6 @@ class PaginationParams(BaseDTO):
         return (self.page - 1) * self.per_page
 
 
-# =============================================================================
-# Timestamp Mixins
-# =============================================================================
 class TimestampMixin():
     """Mixin for created/updated timestamps."""
     created_at: datetime
@@ -119,9 +95,6 @@ class SoftDeleteMixin(BaseDTO):
     deleted_at: datetime | None = None
 
 
-# =============================================================================
-# ID Schemas
-# =============================================================================
 class IDResponse(BaseDTO):
     """Response containing just an ID."""
     id: str
@@ -132,9 +105,6 @@ class IDListResponse(BaseDTO):
     ids: list[str]
 
 
-# =============================================================================
-# Health Check
-# =============================================================================
 class HealthCheckResponse(BaseDTO):
     """Health check response."""
     status: str = "healthy"
@@ -143,9 +113,6 @@ class HealthCheckResponse(BaseDTO):
     services: dict[str, str] = Field(default_factory=dict)
 
 
-# =============================================================================
-# Sorting
-# =============================================================================
 class SortParams(BaseDTO):
     """Sorting query parameters."""
     sort_by: str = "created_at"

@@ -1,7 +1,3 @@
-# =============================================================================
-# Realtime Module - Event Definitions
-# =============================================================================
-
 from enum import Enum
 from typing import Any
 
@@ -85,9 +81,6 @@ class ChatMessageData(BaseModel):
     message_type: str = "text"
 
 
-# =============================================================================
-# Room name generators (for consistent room naming)
-# =============================================================================
 def get_order_room(order_id: str) -> str:
     """Get room name for order updates."""
     return f"order:{order_id}"

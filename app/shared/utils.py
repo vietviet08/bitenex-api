@@ -1,14 +1,3 @@
-# =============================================================================
-# Shared Utilities
-# =============================================================================
-# This module provides utility functions used across the application.
-#
-# Architectural Intent:
-# - Reusable helper functions
-# - Consistent patterns for common operations
-# - No business logic - pure utilities only
-# =============================================================================
-
 import re
 import secrets
 import string
@@ -17,9 +6,6 @@ from typing import Any
 from uuid import uuid4
 
 
-# =============================================================================
-# ID Generation
-# =============================================================================
 def generate_uuid() -> str:
     """Generate a random UUID v4 string."""
     return str(uuid4())
@@ -58,9 +44,6 @@ def generate_transaction_id() -> str:
     return f"TXN-{generate_short_id(14)}"
 
 
-# =============================================================================
-# Timestamp Utilities
-# =============================================================================
 def utc_now() -> datetime:
     """Get current UTC timestamp with timezone info."""
     return datetime.now(timezone.utc)
@@ -76,9 +59,6 @@ def iso_to_timestamp(iso_string: str) -> datetime:
     return datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
 
 
-# =============================================================================
-# String Utilities
-# =============================================================================
 def slugify(text: str) -> str:
     """
     Convert text to URL-friendly slug.
@@ -134,9 +114,6 @@ def normalize_phone(phone: str) -> str:
     return re.sub(r"\D", "", phone)
 
 
-# =============================================================================
-# Dictionary Utilities
-# =============================================================================
 def remove_none_values(d: dict[str, Any]) -> dict[str, Any]:
     """
     Remove keys with None values from a dictionary.
@@ -173,9 +150,6 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-# =============================================================================
-# Geo Utilities (Placeholder)
-# =============================================================================
 def calculate_distance(
     lat1: float,
     lon1: float,
