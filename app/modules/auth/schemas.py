@@ -1,15 +1,3 @@
-# =============================================================================
-# Auth Module - Pydantic Schemas
-# =============================================================================
-# Request and response schemas for authentication endpoints.
-# Uses Pydantic v2 for validation and serialization.
-#
-# Architectural Intent:
-# - Type-safe request validation
-# - Consistent API response structure
-# - Clear separation of input/output contracts
-# =============================================================================
-
 from datetime import datetime
 
 from pydantic import EmailStr, Field
@@ -18,9 +6,6 @@ from app.shared.dto import BaseDTO
 from app.shared.enums import Role
 
 
-# =============================================================================
-# Request Schemas
-# =============================================================================
 class LoginRequest(BaseDTO):
     """Login request with email and password."""
     email: EmailStr
@@ -57,9 +42,6 @@ class ConfirmResetPasswordRequest(BaseDTO):
     new_password: str = Field(min_length=8, max_length=128)
 
 
-# =============================================================================
-# Response Schemas
-# =============================================================================
 class TokenResponse(BaseDTO):
     """JWT token pair response."""
     access_token: str
@@ -90,9 +72,6 @@ class RegisterResponse(BaseDTO):
     message: str = "Registration successful. Please verify your email."
 
 
-# =============================================================================
-# Internal DTOs
-# =============================================================================
 class TokenPayloadDTO(BaseDTO):
     """Internal representation of JWT payload."""
     sub: str  # user_id

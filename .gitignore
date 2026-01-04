@@ -33,6 +33,7 @@ env/
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *~
@@ -55,3 +56,9 @@ logs/
 # Database
 *.db
 *.sqlite3
+
+openspec/
+
+.github/prompts/
+
+AGENTS.md

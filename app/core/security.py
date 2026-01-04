@@ -1,3 +1,6 @@
+import hashlib
+import uuid
+
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -39,10 +42,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def hash_refresh_token(token: str) -> str:
+    """
+    Hash a refresh token for secure storage.
+    
+    Uses SHA-256 to create a consistent hash that can be used
+    for database lookups while preventing token theft if DB is compromised.
+    
+    Args:
+        token: Raw JWT refresh token
+        
+    Returns:
+        SHA-256 hex digest of the token
+    """
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 class TokenType:
     """Token type constants for JWT claims."""
     ACCESS = "access"
     REFRESH = "refresh"
+    VERIFY = "verify"
+    RESET = "reset"
 
 
 def create_access_token(
@@ -109,6 +130,7 @@ def create_refresh_token(user_id: str, role: str) -> str:
         "sub": user_id,
         "role": role,
         "type": TokenType.REFRESH,
+        "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": expire,
     }
@@ -203,5 +225,101 @@ def verify_refresh_token(token: str) -> dict[str, Any]:
     
     if payload.get("type") != TokenType.REFRESH:
         raise AuthenticationError("Invalid token type - expected refresh token")
+    
+    return payload
+
+
+def create_verification_token(user_id: str) -> str:
+    """
+    Create a JWT token for email verification.
+    
+    Args:
+        user_id: User ID to verify
+        
+    Returns:
+        Encoded JWT verification token
+    """
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=24)  # 24 hour expiry
+    
+    payload = {
+        "sub": user_id,
+        "type": TokenType.VERIFY,
+        "iat": now,
+        "exp": expire,
+    }
+    
+    return jwt.encode(
+        payload,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def verify_verification_token(token: str) -> dict[str, Any]:
+    """
+    Verify an email verification token.
+    
+    Args:
+        token: Encoded JWT verification token
+        
+    Returns:
+        Decoded token payload
+        
+    Raises:
+        AuthenticationError: If not a valid verification token
+    """
+    payload = decode_token(token)
+    
+    if payload.get("type") != TokenType.VERIFY:
+        raise AuthenticationError("Invalid token type - expected verification token")
+    
+    return payload
+
+
+def create_password_reset_token(user_id: str) -> str:
+    """
+    Create a JWT token for password reset.
+    
+    Args:
+        user_id: User ID requesting reset
+        
+    Returns:
+        Encoded JWT reset token
+    """
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=1)  # 1 hour expiry for security
+    
+    payload = {
+        "sub": user_id,
+        "type": TokenType.RESET,
+        "iat": now,
+        "exp": expire,
+    }
+    
+    return jwt.encode(
+        payload,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def verify_password_reset_token(token: str) -> dict[str, Any]:
+    """
+    Verify a password reset token.
+    
+    Args:
+        token: Encoded JWT reset token
+        
+    Returns:
+        Decoded token payload
+        
+    Raises:
+        AuthenticationError: If not a valid reset token
+    """
+    payload = decode_token(token)
+    
+    if payload.get("type") != TokenType.RESET:
+        raise AuthenticationError("Invalid token type - expected reset token")
     
     return payload

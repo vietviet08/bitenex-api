@@ -1,15 +1,3 @@
-# =============================================================================
-# Auth Module - ORM Models
-# =============================================================================
-# This module contains database models for authentication.
-# Currently a skeleton - full implementation to be added.
-#
-# Architectural Intent:
-# - Store refresh tokens for token rotation
-# - Track user sessions for security
-# - Support for token blacklisting
-# =============================================================================
-
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text

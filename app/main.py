@@ -95,7 +95,7 @@ async def bitenex_exception_handler(
     return JSONResponse(
         status_code=exc.status_code,
         content={
-            "error": exc.error_code,
+            "error_code": exc.error_code,
             "message": exc.message,
             "details": exc.details,
         },

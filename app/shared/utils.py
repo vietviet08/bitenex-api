@@ -58,6 +58,10 @@ def iso_to_timestamp(iso_string: str) -> datetime:
     """Parse ISO 8601 string to datetime."""
     return datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
 
+def ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 def slugify(text: str) -> str:
     """

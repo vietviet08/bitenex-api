@@ -1,21 +1,10 @@
-# =============================================================================
-# Auth Module - API Router
-# =============================================================================
-# HTTP endpoints for authentication operations.
-# Routers should be thin - delegate all logic to services.
-#
-# Architectural Intent:
-# - Routers handle HTTP concerns only (request/response)
-# - All business logic delegated to service layer
-# - Consistent error handling through exception handlers
-# =============================================================================
-
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser
 from app.modules.auth.schemas import (
+    AuthUserResponse,
     ChangePasswordRequest,
     ConfirmResetPasswordRequest,
     LoginRequest,
@@ -29,9 +18,6 @@ from app.modules.auth.schemas import (
 from app.modules.auth.service import AuthService
 from app.shared.dto import MessageResponse
 
-# =============================================================================
-# Router Configuration
-# =============================================================================
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"],
@@ -42,9 +28,6 @@ router = APIRouter(
 )
 
 
-# =============================================================================
-# Dependency to get service instance
-# =============================================================================
 async def get_auth_service(
     db: AsyncSession = Depends(get_db),
 ) -> AuthService:
@@ -52,9 +35,6 @@ async def get_auth_service(
     return AuthService(db)
 
 
-# =============================================================================
-# Public Endpoints (No authentication required)
-# =============================================================================
 @router.post(
     "/login",
     response_model=LoginResponse,
@@ -144,9 +124,23 @@ async def confirm_password_reset(
     return MessageResponse(message="Password has been reset successfully.")
 
 
-# =============================================================================
-# Protected Endpoints (Authentication required)
-# =============================================================================
+@router.get(
+    "/me",
+    response_model=AuthUserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get current user",
+    description="Get the authenticated user's profile.",
+)
+async def get_me(
+    user: CurrentUser,
+    service: AuthService = Depends(get_auth_service),
+) -> AuthUserResponse:
+    """
+    Get current authenticated user's profile.
+    """
+    return await service.get_current_user(user.user_id)
+
+
 @router.post(
     "/logout",
     response_model=MessageResponse,
