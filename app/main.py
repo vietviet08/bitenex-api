@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 import logging
+import pyfiglet
+import colorama
 from typing import AsyncGenerator
 
 from fastapi import Depends, FastAPI, Request
@@ -38,6 +40,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting Bitenex API...")
     logger.info(f"Environment: {settings.app_env}")
     logger.info(f"Debug mode: {settings.debug}")
+
+    ascii_banner = pyfiglet.figlet_format(settings.app_name, font="doh", width=200)
+    print(colorama.Fore.MAGENTA + ascii_banner)
     
     # TODO: Initialize Redis connection
     # TODO: Start background workers

@@ -35,7 +35,6 @@ from app.core.events import dispatcher, emit_event, Event
 
 __all__ = [
     # Config
-    "settings",
     "get_settings",
     # Database
     "Base",

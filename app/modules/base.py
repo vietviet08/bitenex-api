@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -57,7 +57,7 @@ class BaseModel(Base):
     def soft_delete(self) -> None:
         """Mark the record as deleted."""
         self.is_deleted = True
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(timezone.utc)
     
     def restore(self) -> None:
         """Restore a soft-deleted record."""

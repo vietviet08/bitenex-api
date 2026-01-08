@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    app_name: str = "Bitenex API"
+    app_name: str = "Bitenex"
     app_env: str = "dev"  # dev | stg | prod
     debug: bool = True
     api_version: str = "v1"

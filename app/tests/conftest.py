@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
+from app.core.security import create_access_token
 from app.main import app
 from app.core.database import Base, get_db
 
@@ -75,8 +76,7 @@ def sync_client() -> Generator[TestClient, None, None]:
 
 def create_test_token(user_id: str, role: str = "USER") -> str:
     """Create a JWT token for testing."""
-    from app.core.security import create_access_token
-    return create_access_token({"sub": user_id, "role": role})
+    return create_access_token(user_id=user_id, role=role)
 
 
 def auth_header(token: str) -> dict[str, str]:

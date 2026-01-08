@@ -39,3 +39,7 @@ aiosqlite==0.18.0
 
 # Type checking
 mypy==1.8.0
+
+# Utilities
+colorama==0.4.6
+pyfiglet==1.0.4
