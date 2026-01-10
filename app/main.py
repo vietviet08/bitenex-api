@@ -94,21 +94,6 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-@app.exception_handler(BitenexException)
-async def bitenex_exception_handler(
-    request: Request,
-    exc: BitenexException,
-) -> JSONResponse:
-    """Handle custom application exceptions."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error_code": exc.error_code,
-            "message": exc.message,
-            "details": exc.details,
-        },
-    )
-
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(
     request: Request,
@@ -189,12 +174,18 @@ async def general_exception_handler(
     # Don't expose internal errors in production
     message = str(exc) if settings.debug else "An unexpected error occurred"
     
+    # Use ErrorResponse DTO for consistent format
+    error_response = ErrorResponse(
+        error=ErrorDetail(
+            error_code="INTERNAL_ERROR",
+            message=message,
+            details={},
+        )
+    )
+    
     return JSONResponse(
         status_code=500,
-        content={
-            "error": "INTERNAL_ERROR",
-            "message": message,
-        },
+        content=error_response.model_dump(),
     )
 
 
