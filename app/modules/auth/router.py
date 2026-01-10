@@ -100,7 +100,7 @@ async def request_password_reset(
     """
     Request password reset. Sends email if account exists.
     """
-    await service.request_password_reset(request.email)
+    await service.request_password_reset(str(request.email))
     return MessageResponse(
         message="If the email exists, a reset link has been sent."
     )

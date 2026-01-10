@@ -30,7 +30,7 @@ class SuccessResponse(BaseDTO):
 
 class ErrorDetail(BaseDTO):
     """Error detail structure."""
-    code: str
+    error_code: str
     message: str
     details: dict[str, Any] = Field(default_factory=dict)
 

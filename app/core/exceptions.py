@@ -38,6 +38,18 @@ class BitenexException(Exception):
             }
         }
 
+    def to_error_response(self) -> dict[str, Any]:
+        """Convert exception to ErrorResponse format."""
+        from app.shared.dto import ErrorDetail, ErrorResponse
+        
+        return ErrorResponse(
+            error=ErrorDetail(
+                error_code=self.error_code,
+                message=self.message,
+                details=self.details,
+            )
+        ).model_dump()
+
 
 class AuthenticationError(BitenexException):
     """Raised when authentication fails."""

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -126,7 +126,7 @@ class AuthService:
             AuthenticationError: If credentials are invalid
         """
         # 1. Find user by email
-        user = await self._get_user_by_email(request.email)
+        user = await self._get_user_by_email(str(request.email))
         
         if not user:
             # Use generic message to prevent user enumeration
@@ -146,7 +146,6 @@ class AuthService:
         
         # 5. Store refresh token
         # Parse expiry from settings
-        from datetime import timedelta
         expires_at = datetime.now(timezone.utc) + timedelta(
             days=settings.refresh_token_expire_days
         )
@@ -184,7 +183,7 @@ class AuthService:
             ConflictError: If email already exists
         """
         # 1. Check if email exists
-        existing_user = await self._get_user_by_email(request.email)
+        existing_user = await self._get_user_by_email(str(request.emaill))
         
         if existing_user:
             raise ConflictError(
@@ -197,7 +196,7 @@ class AuthService:
         
         # 3. Create user record
         user = User(
-            email=request.email.lower(),
+            email=str(request.email).lower(),
             password_hash=password_hash,
             full_name=request.full_name,
             phone=request.phone,
@@ -373,7 +372,7 @@ class AuthService:
         # 1. Decode verification token
         try:
             payload = verify_verification_token(token)
-        except Exception as e:
+        except Exception:
             raise ValidationError(
                 message="Invalid or expired verification token",
                 error_code="INVALID_TOKEN",
@@ -438,7 +437,7 @@ class AuthService:
         # 1. Verify reset token
         try:
             payload = verify_password_reset_token(token)
-        except Exception as e:
+        except Exception:
             raise ValidationError(
                 message="Invalid or expired reset token",
                 error_code="INVALID_TOKEN",
