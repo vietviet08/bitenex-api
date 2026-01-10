@@ -183,7 +183,7 @@ class AuthService:
             ConflictError: If email already exists
         """
         # 1. Check if email exists
-        existing_user = await self._get_user_by_email(str(request.emaill))
+        existing_user = await self._get_user_by_email(str(request.email))
         
         if existing_user:
             raise ConflictError(
