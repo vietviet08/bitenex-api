@@ -137,7 +137,7 @@ class AuthService:
             raise AuthenticationError("Invalid email or password")
         
         # 3. Check is_active
-        if not user.is_active:
+        if not user.is_active or user.is_deleted or not user.is_verified:
             raise AuthenticationError("Account has been deactivated")
         
         # 4. Create token pair
