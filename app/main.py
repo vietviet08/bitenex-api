@@ -4,14 +4,12 @@ import pyfiglet
 import colorama
 from typing import AsyncGenerator
 
-from fastapi import Depends, FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.core.database import engine
-from app.core.exceptions import BitenexException, ValidationError
+from app.core.exception_handlers import register_exception_handlers
 
 # Import routers
 from app.modules.auth import router as auth_router
@@ -23,8 +21,7 @@ from app.modules.dispatch import router as dispatch_router
 from app.modules.payment import router as payment_router
 from app.modules.notification import router as notification_router
 from app.modules.admin import router as admin_router
-from app.shared import ErrorResponse
-from app.shared.dto import ErrorDetail
+from app.modules.system import router as system_router
 
 settings = get_settings()
 
@@ -94,102 +91,13 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(
-    request: Request,
-    exc: RequestValidationError,
-) -> JSONResponse:
-    """Handle Pydantic validation errors and convert to custom ValidationError."""
-    # Extract validation errors from Pydantic format
-    errors = exc.errors()
-    error_details = {}
-    
-    # Convert Pydantic errors to a more readable format
-    for error in errors:
-        loc = error.get("loc", [])
-        field_path = str(loc[-1]) if loc else "unknown"
-        error_type = error.get("type", "validation_error")
-        error_msg = error.get("msg", "Validation failed")
-        error_input = error.get("input")
-        
-        # Build field-specific error details
-        if field_path not in error_details:
-            error_details[field_path] = []
-        
-        error_details[field_path].append({
-            "type": error_type,
-            "message": error_msg,
-            "input": error_input,
-        })
-    
-    # Create ValidationError with details
-    validation_error = ValidationError(
-        message="Validation failed",
-        details=error_details,
-    )
-    
-    # Use ErrorResponse DTO for consistent format
-    error_response = ErrorResponse(
-        error=ErrorDetail(
-            error_code=validation_error.error_code,
-            message=validation_error.message,
-            details=validation_error.details,
-        )
-    )
-    
-    return JSONResponse(
-        status_code=validation_error.status_code,
-        content=error_response.model_dump(),
-    )
-
-
-@app.exception_handler(BitenexException)
-async def bitenex_exception_handler(
-    request: Request,
-    exc: BitenexException,
-) -> JSONResponse:
-    """Handle custom application exceptions."""
-    # Use ErrorResponse DTO for consistent format
-    error_response = ErrorResponse(
-        error=ErrorDetail(
-            error_code=exc.error_code,
-            message=exc.message,
-            details=exc.details,
-        )
-    )
-    
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=error_response.model_dump(),
-    )
-
-@app.exception_handler(Exception)
-async def general_exception_handler(
-    request: Request,
-    exc: Exception,
-) -> JSONResponse:
-    """Handle unexpected exceptions."""
-    logger.exception("Unexpected error occurred")
-    
-    # Don't expose internal errors in production
-    message = str(exc) if settings.debug else "An unexpected error occurred"
-    
-    # Use ErrorResponse DTO for consistent format
-    error_response = ErrorResponse(
-        error=ErrorDetail(
-            error_code="INTERNAL_ERROR",
-            message=message,
-            details={},
-        )
-    )
-    
-    return JSONResponse(
-        status_code=500,
-        content=error_response.model_dump(),
-    )
+register_exception_handlers(app, logger, settings)
 
 
 API_V1_PREFIX = "/api/v1"
+
+# System router
+app.include_router(system_router)
 
 # Core routers
 app.include_router(auth_router, prefix=API_V1_PREFIX)
@@ -201,48 +109,3 @@ app.include_router(dispatch_router, prefix=API_V1_PREFIX)
 app.include_router(payment_router, prefix=API_V1_PREFIX)
 app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
-
-
-@app.get("/", tags=["Root"])
-async def root(settings: Settings = Depends(get_settings)):
-    """Root endpoint."""
-    return {
-        "name": settings.app_name,
-        "version": settings.api_version,
-        "status": "running",
-    }
-
-
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "version": settings.api_version,
-    }
-
-
-@app.get("/health/ready", tags=["Health"])
-async def readiness_check():
-    """
-    Readiness check endpoint.
-    Verifies that the application is ready to accept traffic.
-    """
-    # TODO: Add database connectivity check
-    # TODO: Add Redis connectivity check
-    return {
-        "status": "ready",
-        "checks": {
-            "database": "ok",
-            "redis": "ok",
-        },
-    }
-
-
-@app.get("/health/live", tags=["Health"])
-async def liveness_check():
-    """
-    Liveness check endpoint.
-    Indicates that the application is running.
-    """
-    return {"status": "alive"}
