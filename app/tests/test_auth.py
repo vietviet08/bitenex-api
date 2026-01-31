@@ -3,8 +3,8 @@ from httpx import AsyncClient
 
 from app.core.security import (
     create_access_token,
-    create_verification_token,
     create_password_reset_token,
+    create_verification_token,
     hash_password,
     hash_refresh_token,
 )
@@ -68,7 +68,7 @@ def auth_header(user: User) -> dict[str, str]:
 
 class TestRegistration:
     """Tests for user registration."""
-    
+
     async def test_register_success(self, client: AsyncClient):
         """Test successful user registration."""
         response = await client.post(
@@ -79,7 +79,7 @@ class TestRegistration:
                 "full_name": "New User",
             },
         )
-        
+
         assert response.status_code == 201
         data = response.json()
         assert data["user"]["email"] == "newuser@example.com"
@@ -87,10 +87,8 @@ class TestRegistration:
         assert data["user"]["role"] == "USER"
         assert data["user"]["is_verified"] is False
         assert "message" in data
-    
-    async def test_register_duplicate_email(
-        self, client: AsyncClient, test_user: User
-    ):
+
+    async def test_register_duplicate_email(self, client: AsyncClient, test_user: User):
         """Test registration with existing email fails."""
         response = await client.post(
             "/api/v1/auth/register",
@@ -100,11 +98,11 @@ class TestRegistration:
                 "full_name": "Duplicate User",
             },
         )
-        
+
         assert response.status_code == 409
         data = response.json()
         assert data["error_code"] == "DUPLICATE"
-    
+
     async def test_register_weak_password(self, client: AsyncClient):
         """Test registration with short password fails."""
         response = await client.post(
@@ -115,13 +113,13 @@ class TestRegistration:
                 "full_name": "Weak Password User",
             },
         )
-        
+
         assert response.status_code == 422  # Validation error
 
 
 class TestLogin:
     """Tests for user login."""
-    
+
     async def test_login_success(self, client: AsyncClient, test_user: User):
         """Test successful login."""
         response = await client.post(
@@ -131,7 +129,7 @@ class TestLogin:
                 "password": "password123",
             },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "tokens" in data
@@ -139,10 +137,8 @@ class TestLogin:
         assert "refresh_token" in data["tokens"]
         assert data["tokens"]["token_type"] == "bearer"
         assert data["user"]["email"] == test_user.email
-    
-    async def test_login_wrong_password(
-        self, client: AsyncClient, test_user: User
-    ):
+
+    async def test_login_wrong_password(self, client: AsyncClient, test_user: User):
         """Test login with wrong password fails."""
         response = await client.post(
             "/api/v1/auth/login",
@@ -151,9 +147,9 @@ class TestLogin:
                 "password": "wrongpassword",
             },
         )
-        
+
         assert response.status_code == 401
-    
+
     async def test_login_nonexistent_email(self, client: AsyncClient):
         """Test login with non-existent email fails."""
         response = await client.post(
@@ -163,12 +159,10 @@ class TestLogin:
                 "password": "password123",
             },
         )
-        
+
         assert response.status_code == 401
-    
-    async def test_login_inactive_user(
-        self, client: AsyncClient, inactive_user: User
-    ):
+
+    async def test_login_inactive_user(self, client: AsyncClient, inactive_user: User):
         """Test login with inactive user fails."""
         response = await client.post(
             "/api/v1/auth/login",
@@ -177,13 +171,13 @@ class TestLogin:
                 "password": "password123",
             },
         )
-        
+
         assert response.status_code == 401
 
 
 class TestTokenRefresh:
     """Tests for token refresh."""
-    
+
     async def test_refresh_success(self, client: AsyncClient, test_user: User):
         """Test successful token refresh."""
         # First login to get tokens
@@ -195,20 +189,20 @@ class TestTokenRefresh:
             },
         )
         tokens = login_response.json()["tokens"]
-        
+
         # Refresh the token
         response = await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": tokens["refresh_token"]},
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
         assert "refresh_token" in data
         # New tokens should be different
         assert data["refresh_token"] != tokens["refresh_token"]
-    
+
     async def test_refresh_with_revoked_token(
         self, client: AsyncClient, test_user: User
     ):
@@ -222,25 +216,25 @@ class TestTokenRefresh:
             },
         )
         tokens = login_response.json()["tokens"]
-        
+
         # Refresh once (which revokes the original)
         await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": tokens["refresh_token"]},
         )
-        
+
         # Try to use the old token again
         response = await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": tokens["refresh_token"]},
         )
-        
+
         assert response.status_code == 401
 
 
 class TestLogout:
     """Tests for logout functionality."""
-    
+
     async def test_logout_success(self, client: AsyncClient, test_user: User):
         """Test successful logout."""
         # Login first
@@ -252,24 +246,24 @@ class TestLogout:
             },
         )
         tokens = login_response.json()["tokens"]
-        
+
         # Logout
         response = await client.post(
             "/api/v1/auth/logout",
             json={"refresh_token": tokens["refresh_token"]},
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
-        
+
         assert response.status_code == 200
-        
+
         # Try to refresh with the revoked token
         refresh_response = await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": tokens["refresh_token"]},
         )
-        
+
         assert refresh_response.status_code == 401
-    
+
     async def test_logout_all(self, client: AsyncClient, test_user: User):
         """Test logout from all devices."""
         # Login twice to simulate multiple devices
@@ -278,28 +272,28 @@ class TestLogout:
             json={"email": test_user.email, "password": "password123"},
         )
         tokens1 = login1.json()["tokens"]
-        
+
         login2 = await client.post(
             "/api/v1/auth/login",
             json={"email": test_user.email, "password": "password123"},
         )
         tokens2 = login2.json()["tokens"]
-        
+
         # Logout all
         response = await client.post(
             "/api/v1/auth/logout/all",
             headers={"Authorization": f"Bearer {tokens1['access_token']}"},
         )
-        
+
         assert response.status_code == 200
-        
+
         # Both refresh tokens should be revoked
         refresh1 = await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": tokens1["refresh_token"]},
         )
         assert refresh1.status_code == 401
-        
+
         refresh2 = await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": tokens2["refresh_token"]},
@@ -309,53 +303,51 @@ class TestLogout:
 
 class TestGetCurrentUser:
     """Tests for getting current user profile."""
-    
+
     async def test_get_me_success(self, client: AsyncClient, test_user: User):
         """Test getting current user profile."""
         response = await client.get(
             "/api/v1/auth/me",
             headers=auth_header(test_user),
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["email"] == test_user.email
         assert data["full_name"] == test_user.full_name
         assert data["role"] == test_user.role
-    
+
     async def test_get_me_unauthorized(self, client: AsyncClient):
         """Test getting profile without auth fails."""
         response = await client.get("/api/v1/auth/me")
-        
+
         assert response.status_code == 401
 
 
 class TestEmailVerification:
     """Tests for email verification."""
-    
+
     async def test_verify_email_success(
         self, client: AsyncClient, unverified_user: User
     ):
         """Test successful email verification."""
         token = create_verification_token(unverified_user.id)
-        
+
         response = await client.get(f"/api/v1/auth/verify/{token}")
-        
+
         assert response.status_code == 200
-    
+
     async def test_verify_email_invalid_token(self, client: AsyncClient):
         """Test verification with invalid token fails."""
         response = await client.get("/api/v1/auth/verify/invalid-token")
-        
+
         assert response.status_code == 400
 
 
 class TestPasswordChange:
     """Tests for password change."""
-    
-    async def test_change_password_success(
-        self, client: AsyncClient, test_user: User
-    ):
+
+    async def test_change_password_success(self, client: AsyncClient, test_user: User):
         """Test successful password change."""
         response = await client.post(
             "/api/v1/auth/password/change",
@@ -365,9 +357,9 @@ class TestPasswordChange:
             },
             headers=auth_header(test_user),
         )
-        
+
         assert response.status_code == 200
-        
+
         # Verify new password works
         login_response = await client.post(
             "/api/v1/auth/login",
@@ -377,7 +369,7 @@ class TestPasswordChange:
             },
         )
         assert login_response.status_code == 200
-    
+
     async def test_change_password_wrong_current(
         self, client: AsyncClient, test_user: User
     ):
@@ -390,13 +382,13 @@ class TestPasswordChange:
             },
             headers=auth_header(test_user),
         )
-        
+
         assert response.status_code == 401
 
 
 class TestPasswordReset:
     """Tests for password reset flow."""
-    
+
     async def test_request_reset_existing_email(
         self, client: AsyncClient, test_user: User
     ):
@@ -405,26 +397,24 @@ class TestPasswordReset:
             "/api/v1/auth/password/reset",
             json={"email": test_user.email},
         )
-        
+
         # Should always return 200 to prevent email enumeration
         assert response.status_code == 200
-    
+
     async def test_request_reset_nonexistent_email(self, client: AsyncClient):
         """Test password reset request for non-existent email."""
         response = await client.post(
             "/api/v1/auth/password/reset",
             json={"email": "nonexistent@example.com"},
         )
-        
+
         # Should still return 200 to prevent email enumeration
         assert response.status_code == 200
-    
-    async def test_reset_password_success(
-        self, client: AsyncClient, test_user: User
-    ):
+
+    async def test_reset_password_success(self, client: AsyncClient, test_user: User):
         """Test successful password reset."""
         token = create_password_reset_token(test_user.id)
-        
+
         response = await client.post(
             "/api/v1/auth/password/reset/confirm",
             json={
@@ -432,9 +422,9 @@ class TestPasswordReset:
                 "new_password": "resetpassword789",
             },
         )
-        
+
         assert response.status_code == 200
-        
+
         # Verify new password works
         login_response = await client.post(
             "/api/v1/auth/login",
@@ -444,7 +434,7 @@ class TestPasswordReset:
             },
         )
         assert login_response.status_code == 200
-    
+
     async def test_reset_password_invalid_token(self, client: AsyncClient):
         """Test password reset with invalid token fails."""
         response = await client.post(
@@ -454,5 +444,5 @@ class TestPasswordReset:
                 "new_password": "newpassword123",
             },
         )
-        
+
         assert response.status_code == 400

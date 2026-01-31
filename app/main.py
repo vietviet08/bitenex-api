@@ -1,27 +1,27 @@
-from contextlib import asynccontextmanager
 import logging
-import pyfiglet
-import colorama
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+import colorama
+import pyfiglet
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.database import engine
 from app.core.exception_handlers import register_exception_handlers
+from app.modules.admin import router as admin_router
 
 # Import routers
 from app.modules.auth import router as auth_router
-from app.modules.user import router as user_router
+from app.modules.dispatch import router as dispatch_router
 from app.modules.driver import router as driver_router
 from app.modules.merchant import router as merchant_router
-from app.modules.order import router as order_router
-from app.modules.dispatch import router as dispatch_router
-from app.modules.payment import router as payment_router
 from app.modules.notification import router as notification_router
-from app.modules.admin import router as admin_router
+from app.modules.order import router as order_router
+from app.modules.payment import router as payment_router
 from app.modules.system import router as system_router
+from app.modules.user import router as user_router
 
 settings = get_settings()
 
@@ -43,22 +43,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     ascii_banner = pyfiglet.figlet_format(settings.app_name, font="doh", width=200)
     print(colorama.Fore.MAGENTA + ascii_banner)
-    
+
     # TODO: Initialize Redis connection
     # TODO: Start background workers
     # TODO: Run any startup checks
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Bitenex API...")
-    
+
     # Close database connections
     await engine.dispose()
-    
+
     # TODO: Close Redis connection
     # TODO: Stop background workers
-    
+
     logger.info("Shutdown complete")
 
 

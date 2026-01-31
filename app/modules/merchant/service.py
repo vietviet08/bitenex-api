@@ -19,30 +19,30 @@ class MerchantService:
     Merchant management service.
     Handles merchant profiles and menu management.
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def get_merchant_by_id(self, merchant_id: str) -> MerchantResponse | None:
         """Get merchant by ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_merchant_by_slug(self, slug: str) -> MerchantResponse | None:
         """Get merchant by slug."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_merchant_by_user_id(self, user_id: str) -> MerchantResponse | None:
         """Get merchant by owner user ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def create_merchant(self, data: MerchantCreate) -> MerchantResponse:
         """Create merchant profile."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_merchant(
         self,
         merchant_id: str,
@@ -51,7 +51,7 @@ class MerchantService:
         """Update merchant profile."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def list_merchants(
         self,
         city: str | None = None,
@@ -62,7 +62,7 @@ class MerchantService:
         """List merchants with filters and pagination."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def search_merchants(
         self,
         query: str,
@@ -72,12 +72,12 @@ class MerchantService:
         """Search merchants by name."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def approve_merchant(self, merchant_id: str) -> MerchantResponse:
         """Approve merchant application."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     # Menu management
     async def add_menu_item(
         self,
@@ -87,7 +87,7 @@ class MerchantService:
         """Add menu item."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_menu_item(
         self,
         item_id: str,
@@ -96,12 +96,12 @@ class MerchantService:
         """Update menu item."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def delete_menu_item(self, item_id: str) -> None:
         """Delete menu item."""
         # TODO: Implement
         pass
-    
+
     async def get_menu(self, merchant_id: str) -> list[MenuItemResponse]:
         """Get merchant's menu."""
         # TODO: Implement

@@ -19,10 +19,10 @@ class PaymentService:
     Payment processing service.
     Handles payments, refunds, and saved payment methods.
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def create_payment(
         self,
         user_id: str,
@@ -30,7 +30,7 @@ class PaymentService:
     ) -> PaymentResponse:
         """
         Create a payment for an order.
-        
+
         Steps:
         1. Validate order
         2. Generate transaction ID
@@ -40,12 +40,12 @@ class PaymentService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_payment(self, payment_id: str) -> PaymentResponse | None:
         """Get payment by ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_payment_by_transaction(
         self,
         transaction_id: str,
@@ -53,12 +53,12 @@ class PaymentService:
         """Get payment by transaction ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_order_payments(self, order_id: str) -> list[PaymentResponse]:
         """Get all payments for an order."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def process_refund(
         self,
         data: RefundCreate,
@@ -66,7 +66,7 @@ class PaymentService:
     ) -> RefundResponse:
         """
         Process a refund.
-        
+
         Steps:
         1. Validate payment exists and is completed
         2. Validate refund amount
@@ -76,7 +76,7 @@ class PaymentService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def handle_webhook(
         self,
         gateway: str,
@@ -84,12 +84,12 @@ class PaymentService:
     ) -> None:
         """
         Handle payment gateway webhook.
-        
+
         Updates payment status based on gateway events.
         """
         # TODO: Implement
         pass
-    
+
     # Saved payment methods
     async def add_payment_method(
         self,
@@ -99,7 +99,7 @@ class PaymentService:
         """Add a saved payment method."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_payment_methods(
         self,
         user_id: str,
@@ -107,7 +107,7 @@ class PaymentService:
         """Get user's saved payment methods."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def delete_payment_method(
         self,
         user_id: str,
@@ -116,7 +116,7 @@ class PaymentService:
         """Delete a saved payment method."""
         # TODO: Implement
         pass
-    
+
     async def set_default_payment_method(
         self,
         user_id: str,

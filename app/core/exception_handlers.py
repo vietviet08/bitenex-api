@@ -39,11 +39,13 @@ def register_exception_handlers(
             if field_path not in error_details:
                 error_details[field_path] = []
 
-            error_details[field_path].append({
-                "type": error_type,
-                "message": error_msg,
-                "input": error_input,
-            })
+            error_details[field_path].append(
+                {
+                    "type": error_type,
+                    "message": error_msg,
+                    "input": error_input,
+                }
+            )
 
         # Create ValidationError with details
         validation_error = ValidationError(

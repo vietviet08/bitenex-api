@@ -12,6 +12,7 @@ from app.shared.dto import BaseDTO, TimestampMixin
 
 class DashboardStats(BaseDTO):
     """Dashboard statistics."""
+
     total_users: int = 0
     total_drivers: int = 0
     total_merchants: int = 0
@@ -23,6 +24,7 @@ class DashboardStats(BaseDTO):
 
 class AuditLogResponse(BaseDTO, TimestampMixin):
     """Audit log entry response."""
+
     id: str
     admin_id: str
     action: str
@@ -34,12 +36,14 @@ class AuditLogResponse(BaseDTO, TimestampMixin):
 
 class AuditLogListResponse(BaseDTO):
     """Paginated audit log list."""
+
     items: list[AuditLogResponse]
     total: int
 
 
 class SystemConfigResponse(BaseDTO):
     """System configuration response."""
+
     key: str
     value: str
     description: str | None
@@ -47,12 +51,14 @@ class SystemConfigResponse(BaseDTO):
 
 class SystemConfigUpdate(BaseDTO):
     """Update system configuration."""
+
     value: str
     description: str | None = None
 
 
 class UserStatsResponse(BaseDTO):
     """User statistics response."""
+
     total: int
     active: int
     verified: int
@@ -63,6 +69,7 @@ class UserStatsResponse(BaseDTO):
 
 class OrderStatsResponse(BaseDTO):
     """Order statistics response."""
+
     total: int
     by_status: dict[str, int]
     today_count: int
@@ -73,6 +80,7 @@ class OrderStatsResponse(BaseDTO):
 
 class MerchantStatsResponse(BaseDTO):
     """Merchant statistics response."""
+
     total: int
     pending_approval: int
     active: int
@@ -81,6 +89,7 @@ class MerchantStatsResponse(BaseDTO):
 
 class DriverStatsResponse(BaseDTO):
     """Driver statistics response."""
+
     total: int
     online: int
     busy: int

@@ -3,32 +3,31 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
-
 logger = logging.getLogger(__name__)
 
 
 class BaseWorker(ABC):
     """Base class for background workers."""
-    
+
     def __init__(self, name: str) -> None:
         self.name = name
         self._running = False
         self._task: asyncio.Task | None = None
-    
+
     @abstractmethod
     async def process(self, data: dict[str, Any]) -> None:
         """Process a single item."""
         pass
-    
+
     async def start(self) -> None:
         """Start the worker."""
         if self._running:
             return
-        
+
         self._running = True
         self._task = asyncio.create_task(self._run())
         logger.info(f"Worker {self.name} started")
-    
+
     async def stop(self) -> None:
         """Stop the worker."""
         self._running = False
@@ -39,7 +38,7 @@ class BaseWorker(ABC):
             except asyncio.CancelledError:
                 pass
         logger.info(f"Worker {self.name} stopped")
-    
+
     @abstractmethod
     async def _run(self) -> None:
         """Main worker loop."""
@@ -51,20 +50,20 @@ class PaymentWorker(BaseWorker):
     Payment processing worker.
     Handles asynchronous payment tasks.
     """
-    
+
     def __init__(self) -> None:
         super().__init__("payment_worker")
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    
+
     async def enqueue(self, task_data: dict[str, Any]) -> None:
         """Add a payment task to the queue."""
         await self._queue.put(task_data)
         logger.debug(f"Payment task enqueued: {task_data.get('task_type')}")
-    
+
     async def process(self, data: dict[str, Any]) -> None:
         """Process a payment task."""
         task_type = data.get("task_type")
-        
+
         try:
             match task_type:
                 case "process_payment":
@@ -78,7 +77,7 @@ class PaymentWorker(BaseWorker):
         except Exception as e:
             logger.error(f"Failed to process payment task: {e}")
             # TODO: Implement retry logic
-    
+
     async def _run(self) -> None:
         """Main worker loop."""
         while self._running:
@@ -96,7 +95,7 @@ class PaymentWorker(BaseWorker):
                 break
             except Exception as e:
                 logger.error(f"Worker error: {e}")
-    
+
     # =========================================================================
     # Task Handlers (to be implemented)
     # =========================================================================
@@ -105,13 +104,13 @@ class PaymentWorker(BaseWorker):
         # TODO: Implement payment processing
         logger.info(f"Processing payment: {data.get('payment_id')}")
         raise NotImplementedError()
-    
+
     async def _process_refund(self, data: dict[str, Any]) -> None:
         """Process a refund."""
         # TODO: Implement refund processing
         logger.info(f"Processing refund: {data.get('refund_id')}")
         raise NotImplementedError()
-    
+
     async def _verify_payment(self, data: dict[str, Any]) -> None:
         """Verify a payment status."""
         # TODO: Implement payment verification

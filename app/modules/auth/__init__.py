@@ -2,9 +2,8 @@
 # Auth Module Exports
 # =============================================================================
 
-from app.modules.auth.router import router
-from app.modules.auth.service import AuthService
 from app.modules.auth.models import RefreshToken, TokenBlacklist
+from app.modules.auth.router import router
 from app.modules.auth.schemas import (
     LoginRequest,
     LoginResponse,
@@ -12,6 +11,7 @@ from app.modules.auth.schemas import (
     RegisterResponse,
     TokenResponse,
 )
+from app.modules.auth.service import AuthService
 
 __all__ = [
     "router",

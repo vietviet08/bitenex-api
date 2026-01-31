@@ -10,6 +10,7 @@ from app.shared.enums import DispatchStrategy
 
 class DispatchRequest(BaseDTO):
     """Request to dispatch a driver for an order."""
+
     order_id: str
     pickup_latitude: float
     pickup_longitude: float
@@ -18,6 +19,7 @@ class DispatchRequest(BaseDTO):
 
 class DispatchResponse(BaseDTO):
     """Dispatch assignment response."""
+
     assignment_id: str
     order_id: str
     driver_id: str
@@ -27,6 +29,7 @@ class DispatchResponse(BaseDTO):
 
 class DriverAssignmentResponse(BaseDTO):
     """Driver's view of an assignment."""
+
     assignment_id: str
     order_id: str
     status: str
@@ -39,12 +42,14 @@ class DriverAssignmentResponse(BaseDTO):
 
 class AssignmentAction(BaseDTO):
     """Driver action on assignment (accept/reject)."""
+
     action: str = Field(pattern="^(accept|reject)$")
     rejection_reason: str | None = None
 
 
 class DispatchConfigUpdate(BaseDTO):
     """Update dispatch configuration."""
+
     default_strategy: DispatchStrategy | None = None
     assignment_timeout_seconds: int | None = Field(default=None, ge=30, le=300)
     max_assignment_attempts: int | None = Field(default=None, ge=1, le=10)
@@ -54,6 +59,7 @@ class DispatchConfigUpdate(BaseDTO):
 
 class DispatchConfigResponse(BaseDTO, TimestampMixin):
     """Dispatch configuration response."""
+
     id: str
     region: str
     default_strategy: DispatchStrategy

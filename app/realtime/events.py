@@ -6,41 +6,42 @@ from pydantic import BaseModel
 
 class RealtimeEventType(str, Enum):
     """WebSocket event types."""
-    
+
     # Connection events
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
-    
+
     # Order events
     ORDER_CREATED = "order.created"
     ORDER_UPDATED = "order.updated"
     ORDER_STATUS_CHANGED = "order.status_changed"
     ORDER_CANCELLED = "order.cancelled"
-    
+
     # Driver events
     DRIVER_LOCATION_UPDATED = "driver.location_updated"
     DRIVER_STATUS_CHANGED = "driver.status_changed"
     DRIVER_ASSIGNED = "driver.assigned"
-    
+
     # Dispatch events
     DISPATCH_NEW_ORDER = "dispatch.new_order"
     DISPATCH_ASSIGNMENT = "dispatch.assignment"
     DISPATCH_TIMEOUT = "dispatch.timeout"
-    
+
     # Merchant events
     MERCHANT_NEW_ORDER = "merchant.new_order"
     MERCHANT_ORDER_UPDATE = "merchant.order_update"
-    
+
     # Chat/messaging events
     CHAT_MESSAGE = "chat.message"
     CHAT_TYPING = "chat.typing"
-    
+
     # Notification events
     NOTIFICATION_NEW = "notification.new"
 
 
 class RealtimeEvent(BaseModel):
     """Base realtime event structure."""
+
     event: str
     data: dict[str, Any]
     timestamp: str | None = None
@@ -48,6 +49,7 @@ class RealtimeEvent(BaseModel):
 
 class LocationData(BaseModel):
     """Location update data."""
+
     user_id: str
     latitude: float
     longitude: float
@@ -57,6 +59,7 @@ class LocationData(BaseModel):
 
 class OrderEventData(BaseModel):
     """Order event data."""
+
     order_id: str
     status: str
     user_id: str | None = None
@@ -66,6 +69,7 @@ class OrderEventData(BaseModel):
 
 class DispatchEventData(BaseModel):
     """Dispatch event data."""
+
     assignment_id: str
     order_id: str
     driver_id: str
@@ -74,6 +78,7 @@ class DispatchEventData(BaseModel):
 
 class ChatMessageData(BaseModel):
     """Chat message data."""
+
     message_id: str
     sender_id: str
     receiver_id: str

@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.order.schemas import (
     OrderCreate,
+    OrderListResponse,
     OrderResponse,
     OrderStatusUpdate,
-    OrderListResponse,
 )
 from app.shared.enums import OrderStatus
 
@@ -18,10 +18,10 @@ class OrderService:
     Order management service.
     Handles order lifecycle from creation to completion.
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def create_order(
         self,
         user_id: str,
@@ -29,7 +29,7 @@ class OrderService:
     ) -> OrderResponse:
         """
         Create a new order.
-        
+
         Steps:
         1. Validate merchant is active
         2. Validate menu items exist and are available
@@ -39,17 +39,17 @@ class OrderService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_order_by_id(self, order_id: str) -> OrderResponse | None:
         """Get order by ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_order_by_number(self, order_number: str) -> OrderResponse | None:
         """Get order by order number."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_status(
         self,
         order_id: str,
@@ -58,7 +58,7 @@ class OrderService:
     ) -> OrderResponse:
         """
         Update order status.
-        
+
         Validates status transitions and emits events.
         """
         # TODO: Implement
@@ -67,7 +67,7 @@ class OrderService:
         # 3. Create status history entry
         # 4. Emit OrderStatusChangedEvent
         raise NotImplementedError()
-    
+
     async def get_user_orders(
         self,
         user_id: str,
@@ -78,7 +78,7 @@ class OrderService:
         """Get orders for a user."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_merchant_orders(
         self,
         merchant_id: str,
@@ -89,7 +89,7 @@ class OrderService:
         """Get orders for a merchant."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_driver_orders(
         self,
         driver_id: str,
@@ -100,7 +100,7 @@ class OrderService:
         """Get orders for a driver."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def cancel_order(
         self,
         order_id: str,
@@ -114,7 +114,7 @@ class OrderService:
         # 3. Trigger refund if paid
         # 4. Notify parties
         raise NotImplementedError()
-    
+
     async def assign_driver(
         self,
         order_id: str,
@@ -123,7 +123,7 @@ class OrderService:
         """Assign driver to order."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     def _validate_status_transition(
         self,
         current: OrderStatus,
@@ -142,5 +142,5 @@ class OrderService:
             OrderStatus.CANCELLED: [OrderStatus.REFUNDED],
             OrderStatus.REFUNDED: [],
         }
-        
+
         return new in allowed_transitions.get(current, [])

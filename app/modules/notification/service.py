@@ -22,17 +22,17 @@ class NotificationService:
     Notification service.
     Handles sending and managing notifications.
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def send_notification(
         self,
         data: NotificationCreate,
     ) -> NotificationResponse:
         """
         Send a notification to a user.
-        
+
         Steps:
         1. Check user preferences
         2. Create notification record
@@ -41,7 +41,7 @@ class NotificationService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def send_push(
         self,
         user_id: str,
@@ -52,7 +52,7 @@ class NotificationService:
         """Send push notification to user's devices."""
         # TODO: Implement
         pass
-    
+
     async def send_email(
         self,
         user_id: str,
@@ -63,7 +63,7 @@ class NotificationService:
         """Send email notification."""
         # TODO: Implement
         pass
-    
+
     async def send_sms(
         self,
         user_id: str,
@@ -72,7 +72,7 @@ class NotificationService:
         """Send SMS notification."""
         # TODO: Implement
         pass
-    
+
     async def get_notifications(
         self,
         user_id: str,
@@ -84,7 +84,7 @@ class NotificationService:
         # TODO: Implement
         # Returns (notifications, total, unread_count)
         raise NotImplementedError()
-    
+
     async def mark_as_read(
         self,
         notification_id: str,
@@ -93,12 +93,12 @@ class NotificationService:
         """Mark notification as read."""
         # TODO: Implement
         pass
-    
+
     async def mark_all_as_read(self, user_id: str) -> None:
         """Mark all notifications as read."""
         # TODO: Implement
         pass
-    
+
     # Device tokens
     async def register_device(
         self,
@@ -108,7 +108,7 @@ class NotificationService:
         """Register device for push notifications."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def unregister_device(
         self,
         user_id: str,
@@ -117,7 +117,7 @@ class NotificationService:
         """Unregister a device."""
         # TODO: Implement
         pass
-    
+
     # Preferences
     async def get_preferences(
         self,
@@ -126,7 +126,7 @@ class NotificationService:
         """Get user's notification preferences."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_preferences(
         self,
         user_id: str,
@@ -135,7 +135,7 @@ class NotificationService:
         """Update notification preferences."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def broadcast(
         self,
         title: str,

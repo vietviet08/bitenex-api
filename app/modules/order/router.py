@@ -111,9 +111,7 @@ async def get_merchant_orders(
 ) -> OrderListResponse:
     """Get orders for merchant."""
     # TODO: Get merchant_id from user
-    items, total = await service.get_merchant_orders(
-        "", status_filter, page, per_page
-    )
+    items, total = await service.get_merchant_orders("", status_filter, page, per_page)
     return OrderListResponse(items=items, total=total)
 
 
@@ -151,7 +149,5 @@ async def get_driver_orders(
 ) -> OrderListResponse:
     """Get orders assigned to driver."""
     # TODO: Get driver_id from user
-    items, total = await service.get_driver_orders(
-        "", status_filter, page, per_page
-    )
+    items, total = await service.get_driver_orders("", status_filter, page, per_page)
     return OrderListResponse(items=items, total=total)

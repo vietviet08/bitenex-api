@@ -15,10 +15,10 @@ def generate_short_id(length: int = 8) -> str:
     """
     Generate a short alphanumeric ID.
     Useful for order numbers, reference codes, etc.
-    
+
     Args:
         length: Length of the ID (default 8)
-        
+
     Returns:
         Alphanumeric string
     """
@@ -58,18 +58,20 @@ def iso_to_timestamp(iso_string: str) -> datetime:
     """Parse ISO 8601 string to datetime."""
     return datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
 
+
 def ensure_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
+
 def slugify(text: str) -> str:
     """
     Convert text to URL-friendly slug.
-    
+
     Args:
         text: Text to slugify
-        
+
     Returns:
         Lowercase slug with hyphens
     """
@@ -89,18 +91,18 @@ def mask_string(value: str, visible_chars: int = 4, mask_char: str = "*") -> str
     """
     Mask a string, showing only last few characters.
     Useful for displaying sensitive data like card numbers.
-    
+
     Args:
         value: String to mask
         visible_chars: Number of characters to show at the end
         mask_char: Character to use for masking
-        
+
     Returns:
         Masked string (e.g., "****1234")
     """
     if len(value) <= visible_chars:
         return value
-    
+
     mask_length = len(value) - visible_chars
     return mask_char * mask_length + value[-visible_chars:]
 
@@ -108,10 +110,10 @@ def mask_string(value: str, visible_chars: int = 4, mask_char: str = "*") -> str
 def normalize_phone(phone: str) -> str:
     """
     Normalize phone number by removing non-digit characters.
-    
+
     Args:
         phone: Phone number string
-        
+
     Returns:
         Digits only
     """
@@ -121,10 +123,10 @@ def normalize_phone(phone: str) -> str:
 def remove_none_values(d: dict[str, Any]) -> dict[str, Any]:
     """
     Remove keys with None values from a dictionary.
-    
+
     Args:
         d: Dictionary to clean
-        
+
     Returns:
         Dictionary without None values
     """
@@ -135,22 +137,22 @@ def deep_merge(base: dict, override: dict) -> dict:
     """
     Deep merge two dictionaries.
     Override values take precedence.
-    
+
     Args:
         base: Base dictionary
         override: Override dictionary
-        
+
     Returns:
         Merged dictionary
     """
     result = base.copy()
-    
+
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = deep_merge(result[key], value)
         else:
             result[key] = value
-    
+
     return result
 
 
@@ -163,29 +165,29 @@ def calculate_distance(
     """
     Calculate distance between two points in kilometers.
     Uses Haversine formula.
-    
+
     Args:
         lat1, lon1: First point coordinates
         lat2, lon2: Second point coordinates
-        
+
     Returns:
         Distance in kilometers
     """
     import math
-    
+
     R = 6371  # Earth's radius in kilometers
-    
+
     lat1_rad = math.radians(lat1)
     lat2_rad = math.radians(lat2)
     delta_lat = math.radians(lat2 - lat1)
     delta_lon = math.radians(lon2 - lon1)
-    
+
     a = (
         math.sin(delta_lat / 2) ** 2
         + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    
+
     return R * c
 
 
@@ -198,12 +200,12 @@ def is_within_radius(
 ) -> bool:
     """
     Check if a point is within a radius of a center point.
-    
+
     Args:
         center_lat, center_lon: Center point coordinates
         point_lat, point_lon: Point to check
         radius_km: Radius in kilometers
-        
+
     Returns:
         True if point is within radius
     """

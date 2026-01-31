@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import field_validator, Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables.
     Uses pydantic-settings for automatic env loading and validation.
     """
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -47,18 +47,19 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             # Handle JSON-like string from env
             import json
+
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
                 # Handle comma-separated string
                 return [origin.strip() for origin in v.split(",")]
         return v
-    
+
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""
         return self.app_env == "prod"
-    
+
     @property
     def is_development(self) -> bool:
         """Check if running in development environment."""

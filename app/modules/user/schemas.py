@@ -12,6 +12,7 @@ from app.shared.enums import Role
 
 class UserBase(BaseDTO):
     """Base user fields."""
+
     email: EmailStr
     full_name: str = Field(min_length=2, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
@@ -19,12 +20,14 @@ class UserBase(BaseDTO):
 
 class UserCreate(UserBase):
     """Create user request."""
+
     password: str = Field(min_length=8, max_length=128)
     role: Role = Role.USER
 
 
 class UserUpdate(BaseDTO):
     """Update user request."""
+
     full_name: str | None = Field(default=None, min_length=2, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
     avatar_url: str | None = None
@@ -32,6 +35,7 @@ class UserUpdate(BaseDTO):
 
 class UserResponse(UserBase, TimestampMixin):
     """User response."""
+
     id: str
     role: Role
     is_active: bool
@@ -41,12 +45,14 @@ class UserResponse(UserBase, TimestampMixin):
 
 class UserListResponse(BaseDTO):
     """Paginated user list."""
+
     items: list[UserResponse]
     total: int
 
 
 class AddressBase(BaseDTO):
     """Base address fields."""
+
     label: str = Field(max_length=50)
     address_line1: str = Field(max_length=255)
     address_line2: str | None = Field(default=None, max_length=255)
@@ -59,10 +65,12 @@ class AddressBase(BaseDTO):
 
 class AddressCreate(AddressBase):
     """Create address request."""
+
     pass
 
 
 class AddressResponse(AddressBase, TimestampMixin):
     """Address response."""
+
     id: str
     user_id: str

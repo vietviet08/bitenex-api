@@ -1,5 +1,5 @@
-from app.workers.payment_worker import PaymentWorker, payment_worker
 from app.workers.notification_worker import NotificationWorker, notification_worker
+from app.workers.payment_worker import PaymentWorker, payment_worker
 
 __all__ = [
     "PaymentWorker",

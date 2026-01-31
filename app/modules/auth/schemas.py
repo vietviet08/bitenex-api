@@ -8,12 +8,14 @@ from app.shared.enums import Role
 
 class LoginRequest(BaseDTO):
     """Login request with email and password."""
+
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
 
 
 class RegisterRequest(BaseDTO):
     """User registration request."""
+
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=2, max_length=100)
@@ -22,28 +24,33 @@ class RegisterRequest(BaseDTO):
 
 class RefreshTokenRequest(BaseDTO):
     """Token refresh request."""
+
     refresh_token: str
 
 
 class ChangePasswordRequest(BaseDTO):
     """Password change request."""
+
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
 
 
 class ResetPasswordRequest(BaseDTO):
     """Password reset request (forgot password flow)."""
+
     email: EmailStr
 
 
 class ConfirmResetPasswordRequest(BaseDTO):
     """Confirm password reset with token."""
+
     token: str
     new_password: str = Field(min_length=8, max_length=128)
 
 
 class TokenResponse(BaseDTO):
     """JWT token pair response."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -52,6 +59,7 @@ class TokenResponse(BaseDTO):
 
 class AuthUserResponse(BaseDTO):
     """Authenticated user info response."""
+
     id: str
     email: str
     full_name: str
@@ -62,18 +70,21 @@ class AuthUserResponse(BaseDTO):
 
 class LoginResponse(BaseDTO):
     """Complete login response with tokens and user info."""
+
     tokens: TokenResponse
     user: AuthUserResponse
 
 
 class RegisterResponse(BaseDTO):
     """Registration response."""
+
     user: AuthUserResponse
     message: str = "Registration successful. Please verify your email."
 
 
 class TokenPayloadDTO(BaseDTO):
     """Internal representation of JWT payload."""
+
     sub: str  # user_id
     role: Role
     type: str  # "access" or "refresh"

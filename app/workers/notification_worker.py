@@ -4,7 +4,6 @@ from typing import Any
 
 from app.workers.payment_worker import BaseWorker
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -13,20 +12,20 @@ class NotificationWorker(BaseWorker):
     Notification sending worker.
     Handles asynchronous notification delivery.
     """
-    
+
     def __init__(self) -> None:
         super().__init__("notification_worker")
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    
+
     async def enqueue(self, task_data: dict[str, Any]) -> None:
         """Add a notification task to the queue."""
         await self._queue.put(task_data)
         logger.debug(f"Notification task enqueued: {task_data.get('channel')}")
-    
+
     async def process(self, data: dict[str, Any]) -> None:
         """Process a notification task."""
         channel = data.get("channel")
-        
+
         try:
             match channel:
                 case "push":
@@ -42,7 +41,7 @@ class NotificationWorker(BaseWorker):
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
             # TODO: Implement retry logic
-    
+
     async def _run(self) -> None:
         """Main worker loop."""
         while self._running:
@@ -60,7 +59,7 @@ class NotificationWorker(BaseWorker):
                 break
             except Exception as e:
                 logger.error(f"Worker error: {e}")
-    
+
     # =========================================================================
     # Channel Handlers (to be implemented)
     # =========================================================================
@@ -69,19 +68,19 @@ class NotificationWorker(BaseWorker):
         # TODO: Implement push notification
         logger.info(f"Sending push notification to: {data.get('user_id')}")
         raise NotImplementedError()
-    
+
     async def _send_email(self, data: dict[str, Any]) -> None:
         """Send email notification."""
         # TODO: Implement email sending
         logger.info(f"Sending email to: {data.get('email')}")
         raise NotImplementedError()
-    
+
     async def _send_sms(self, data: dict[str, Any]) -> None:
         """Send SMS notification."""
         # TODO: Implement SMS sending
         logger.info(f"Sending SMS to: {data.get('phone')}")
         raise NotImplementedError()
-    
+
     async def _send_in_app(self, data: dict[str, Any]) -> None:
         """Send in-app notification via WebSocket."""
         # TODO: Implement in-app notification

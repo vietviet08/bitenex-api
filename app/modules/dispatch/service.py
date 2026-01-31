@@ -18,17 +18,17 @@ class DispatchService:
     Driver dispatch service.
     Handles automatic and manual driver assignment for orders.
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def dispatch_order(
         self,
         request: DispatchRequest,
     ) -> DispatchResponse:
         """
         Find and assign a driver for an order.
-        
+
         Steps:
         1. Find nearby available drivers
         2. Apply dispatch strategy
@@ -38,7 +38,7 @@ class DispatchService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def find_best_driver(
         self,
         latitude: float,
@@ -47,7 +47,7 @@ class DispatchService:
     ) -> str | None:
         """
         Find the best driver for a pickup location.
-        
+
         Strategies:
         - NEAREST: Closest available driver
         - LEAST_BUSY: Driver with fewest active orders
@@ -55,7 +55,7 @@ class DispatchService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_pending_assignments(
         self,
         driver_id: str,
@@ -63,7 +63,7 @@ class DispatchService:
         """Get pending assignments for a driver."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def respond_to_assignment(
         self,
         assignment_id: str,
@@ -72,7 +72,7 @@ class DispatchService:
     ) -> DispatchResponse:
         """
         Driver responds to an assignment.
-        
+
         Actions:
         - accept: Assign driver to order
         - reject: Try next driver
@@ -83,7 +83,7 @@ class DispatchService:
         # 3. If rejected, try next driver
         # 4. Emit appropriate events
         raise NotImplementedError()
-    
+
     async def cancel_assignment(
         self,
         assignment_id: str,
@@ -92,7 +92,7 @@ class DispatchService:
         """Cancel a pending assignment."""
         # TODO: Implement
         pass
-    
+
     async def reassign_order(
         self,
         order_id: str,
@@ -104,7 +104,7 @@ class DispatchService:
         """
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def manual_assign(
         self,
         order_id: str,

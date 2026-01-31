@@ -13,6 +13,7 @@ from app.shared.enums import NotificationChannel, NotificationType
 
 class NotificationCreate(BaseDTO):
     """Create notification request."""
+
     user_id: str
     type: NotificationType
     channel: NotificationChannel
@@ -23,6 +24,7 @@ class NotificationCreate(BaseDTO):
 
 class NotificationResponse(BaseDTO, TimestampMixin):
     """Notification response."""
+
     id: str
     user_id: str
     type: NotificationType
@@ -36,6 +38,7 @@ class NotificationResponse(BaseDTO, TimestampMixin):
 
 class NotificationListResponse(BaseDTO):
     """Paginated notification list."""
+
     items: list[NotificationResponse]
     total: int
     unread_count: int
@@ -43,12 +46,14 @@ class NotificationListResponse(BaseDTO):
 
 class DeviceTokenCreate(BaseDTO):
     """Register device token request."""
+
     token: str
     platform: str = Field(pattern="^(ios|android|web)$")
 
 
 class DeviceTokenResponse(BaseDTO):
     """Device token response."""
+
     id: str
     platform: str
     is_active: bool
@@ -56,6 +61,7 @@ class DeviceTokenResponse(BaseDTO):
 
 class NotificationPreferenceUpdate(BaseDTO):
     """Update notification preferences."""
+
     push_enabled: bool | None = None
     email_enabled: bool | None = None
     sms_enabled: bool | None = None
@@ -65,6 +71,7 @@ class NotificationPreferenceUpdate(BaseDTO):
 
 class NotificationPreferenceResponse(BaseDTO):
     """Notification preferences response."""
+
     push_enabled: bool
     email_enabled: bool
     sms_enabled: bool
@@ -74,6 +81,7 @@ class NotificationPreferenceResponse(BaseDTO):
 
 class BroadcastNotification(BaseDTO):
     """Broadcast notification to multiple users."""
+
     user_ids: list[str] | None = None  # None = all users
     type: NotificationType
     title: str

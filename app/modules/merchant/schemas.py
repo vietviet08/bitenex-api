@@ -10,6 +10,7 @@ from app.shared.enums import MerchantStatus
 
 class MerchantBase(BaseDTO):
     """Base merchant fields."""
+
     name: str = Field(max_length=100)
     description: str | None = None
     address: str = Field(max_length=255)
@@ -22,6 +23,7 @@ class MerchantBase(BaseDTO):
 
 class MerchantCreate(MerchantBase):
     """Create merchant request."""
+
     user_id: str
     latitude: float | None = None
     longitude: float | None = None
@@ -29,6 +31,7 @@ class MerchantCreate(MerchantBase):
 
 class MerchantUpdate(BaseDTO):
     """Update merchant request."""
+
     name: str | None = None
     description: str | None = None
     address: str | None = None
@@ -40,6 +43,7 @@ class MerchantUpdate(BaseDTO):
 
 class MerchantResponse(MerchantBase, TimestampMixin):
     """Merchant response."""
+
     id: str
     user_id: str
     slug: str
@@ -55,6 +59,7 @@ class MerchantResponse(MerchantBase, TimestampMixin):
 
 class MerchantListResponse(BaseDTO):
     """Paginated merchant list."""
+
     items: list[MerchantResponse]
     total: int
 
@@ -62,6 +67,7 @@ class MerchantListResponse(BaseDTO):
 # Menu Item schemas
 class MenuItemBase(BaseDTO):
     """Base menu item fields."""
+
     name: str = Field(max_length=100)
     description: str | None = None
     price: float = Field(gt=0)
@@ -71,11 +77,13 @@ class MenuItemBase(BaseDTO):
 
 class MenuItemCreate(MenuItemBase):
     """Create menu item request."""
+
     pass
 
 
 class MenuItemUpdate(BaseDTO):
     """Update menu item request."""
+
     name: str | None = None
     description: str | None = None
     price: float | None = None
@@ -85,6 +93,7 @@ class MenuItemUpdate(BaseDTO):
 
 class MenuItemResponse(MenuItemBase, TimestampMixin):
     """Menu item response."""
+
     id: str
     merchant_id: str
     image_url: str | None = None

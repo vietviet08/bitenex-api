@@ -19,25 +19,25 @@ class DriverService:
     Driver management service.
     Handles driver profiles, locations, and status.
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def get_driver_by_id(self, driver_id: str) -> DriverResponse | None:
         """Get driver by ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def get_driver_by_user_id(self, user_id: str) -> DriverResponse | None:
         """Get driver by user ID."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def create_driver(self, data: DriverCreate) -> DriverResponse:
         """Create driver profile."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_driver(
         self,
         driver_id: str,
@@ -46,7 +46,7 @@ class DriverService:
         """Update driver profile."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_status(
         self,
         driver_id: str,
@@ -55,7 +55,7 @@ class DriverService:
         """Update driver availability status."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def update_location(
         self,
         driver_id: str,
@@ -67,7 +67,7 @@ class DriverService:
         # 2. Store in location history
         # 3. Publish location event for real-time tracking
         pass
-    
+
     async def get_nearby_drivers(
         self,
         latitude: float,
@@ -80,12 +80,12 @@ class DriverService:
         # 2. Filter by distance
         # 3. Sort by proximity
         raise NotImplementedError()
-    
+
     async def approve_driver(self, driver_id: str) -> DriverResponse:
         """Approve driver application."""
         # TODO: Implement
         raise NotImplementedError()
-    
+
     async def suspend_driver(self, driver_id: str, reason: str) -> None:
         """Suspend a driver."""
         # TODO: Implement

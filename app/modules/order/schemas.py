@@ -3,6 +3,7 @@
 # =============================================================================
 
 from datetime import datetime
+
 from pydantic import Field
 
 from app.shared.dto import BaseDTO, TimestampMixin
@@ -11,6 +12,7 @@ from app.shared.enums import OrderStatus
 
 class OrderItemCreate(BaseDTO):
     """Create order item request."""
+
     menu_item_id: str
     quantity: int = Field(ge=1)
     notes: str | None = None
@@ -18,6 +20,7 @@ class OrderItemCreate(BaseDTO):
 
 class OrderItemResponse(BaseDTO):
     """Order item response."""
+
     id: str
     menu_item_id: str
     name: str
@@ -29,6 +32,7 @@ class OrderItemResponse(BaseDTO):
 
 class OrderCreate(BaseDTO):
     """Create order request."""
+
     merchant_id: str
     items: list[OrderItemCreate] = Field(min_length=1)
     delivery_address: str
@@ -39,17 +43,20 @@ class OrderCreate(BaseDTO):
 
 class OrderUpdate(BaseDTO):
     """Update order request (limited fields)."""
+
     customer_note: str | None = None
 
 
 class OrderStatusUpdate(BaseDTO):
     """Update order status request."""
+
     status: OrderStatus
     reason: str | None = None
 
 
 class OrderResponse(BaseDTO, TimestampMixin):
     """Order response."""
+
     id: str
     order_number: str
     user_id: str
@@ -72,12 +79,14 @@ class OrderResponse(BaseDTO, TimestampMixin):
 
 class OrderListResponse(BaseDTO):
     """Paginated order list."""
+
     items: list[OrderResponse]
     total: int
 
 
 class OrderStatusHistoryResponse(BaseDTO):
     """Order status history entry."""
+
     id: str
     from_status: str | None
     to_status: str

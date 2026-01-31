@@ -1,11 +1,7 @@
 from typing import AsyncGenerator
 
 from sqlalchemy import MetaData
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
@@ -44,7 +40,7 @@ class Base(DeclarativeBase):
     Base class for all ORM models.
     All models should inherit from this class.
     """
-    
+
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
@@ -52,7 +48,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency that provides a database session.
     Automatically handles commit/rollback and session cleanup.
-    
+
     Usage in routes:
         @router.get("/items")
         async def get_items(db: AsyncSession = Depends(get_db)):

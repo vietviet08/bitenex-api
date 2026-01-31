@@ -10,6 +10,7 @@ from app.shared.enums import PaymentMethod, PaymentStatus
 
 class PaymentCreate(BaseDTO):
     """Create payment request."""
+
     order_id: str
     amount: float
     currency: str = "USD"
@@ -19,6 +20,7 @@ class PaymentCreate(BaseDTO):
 
 class PaymentResponse(BaseDTO, TimestampMixin):
     """Payment response."""
+
     id: str
     transaction_id: str
     order_id: str
@@ -33,6 +35,7 @@ class PaymentResponse(BaseDTO, TimestampMixin):
 
 class RefundCreate(BaseDTO):
     """Create refund request."""
+
     payment_id: str
     amount: float | None = None  # Full refund if None
     reason: str
@@ -40,6 +43,7 @@ class RefundCreate(BaseDTO):
 
 class RefundResponse(BaseDTO, TimestampMixin):
     """Refund response."""
+
     id: str
     payment_id: str
     order_id: str
@@ -51,6 +55,7 @@ class RefundResponse(BaseDTO, TimestampMixin):
 
 class SavedPaymentMethodResponse(BaseDTO):
     """Saved payment method response."""
+
     id: str
     type: str
     last_four: str | None = None
@@ -60,12 +65,14 @@ class SavedPaymentMethodResponse(BaseDTO):
 
 class AddPaymentMethodRequest(BaseDTO):
     """Add payment method request."""
+
     type: PaymentMethod
     token: str  # Token from payment gateway
 
 
 class PaymentWebhookPayload(BaseDTO):
     """Payment gateway webhook payload."""
+
     gateway: str
     event_type: str
     transaction_id: str

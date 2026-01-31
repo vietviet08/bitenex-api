@@ -6,21 +6,25 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
+from app.core.config import get_settings
 from app.core.database import Base
+from app.modules.admin.models import AdminAuditLog, SystemConfig
+from app.modules.auth.models import RefreshToken, TokenBlacklist
+from app.modules.base import BaseModel
+from app.modules.dispatch.models import DispatchAssignment, DispatchConfig
+from app.modules.driver.models import Driver, DriverLocation
+from app.modules.merchant.models import MenuItem, Merchant, MerchantCategory
+from app.modules.notification.models import (
+    DeviceToken,
+    Notification,
+    NotificationPreference,
+)
+from app.modules.order.models import Order, OrderItem, OrderStatusHistory
+from app.modules.payment.models import Payment, PaymentMethod, Refund
+from app.modules.user.models import User, UserAddress
+
 # from app.core.config import settings
 
-from app.modules.base import BaseModel
-from app.modules.auth.models import RefreshToken, TokenBlacklist
-from app.modules.user.models import User, UserAddress
-from app.modules.driver.models import Driver, DriverLocation
-from app.modules.merchant.models import Merchant, MerchantCategory, MenuItem
-from app.modules.order.models import Order, OrderItem, OrderStatusHistory
-from app.modules.dispatch.models import DispatchAssignment, DispatchConfig
-from app.modules.payment.models import Payment, Refund, PaymentMethod
-from app.modules.notification.models import Notification, DeviceToken, NotificationPreference
-from app.modules.admin.models import AdminAuditLog, SystemConfig
-from app.core.config import get_settings
 
 settings = get_settings()
 
@@ -72,7 +76,7 @@ async def run_async_migrations() -> None:
     """
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = settings.database_url
-    
+
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",
