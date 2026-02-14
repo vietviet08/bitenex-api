@@ -10,12 +10,20 @@ from app.shared.dto import BaseDTO, TimestampMixin
 from app.shared.enums import OrderStatus
 
 
+class SelectedOptionInput(BaseDTO):
+    """Selected option in an order item."""
+
+    option_group_id: str
+    option_id: str
+
+
 class OrderItemCreate(BaseDTO):
     """Create order item request."""
 
     menu_item_id: str
     quantity: int = Field(ge=1)
     notes: str | None = None
+    selected_options: list[SelectedOptionInput] = []
 
 
 class OrderItemResponse(BaseDTO):
@@ -28,6 +36,7 @@ class OrderItemResponse(BaseDTO):
     quantity: int
     subtotal: float
     notes: str | None = None
+    selected_options: str | None = None
 
 
 class OrderCreate(BaseDTO):

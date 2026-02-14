@@ -105,6 +105,9 @@ class OrderItem(BaseModel):
     # Special instructions
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # JSON snapshot of selected options at order time
+    selected_options: Mapped[str | None] = mapped_column(Text, nullable=True)
+
 
 class OrderStatusHistory(BaseModel):
     """

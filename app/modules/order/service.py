@@ -2,13 +2,21 @@
 # Order Module - Service Layer
 # =============================================================================
 
+import json
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError, ValidationError
+from app.modules.merchant.models import MenuItem, MenuItemOption, MenuItemOptionGroup
+from app.modules.order.models import Order, OrderItem, OrderStatusHistory
 from app.modules.order.schemas import (
     OrderCreate,
+    OrderItemResponse,
     OrderListResponse,
     OrderResponse,
     OrderStatusUpdate,
+    SelectedOptionInput,
 )
 from app.shared.enums import OrderStatus
 
@@ -22,6 +30,65 @@ class OrderService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _validate_and_snapshot_options(
+        self,
+        menu_item_id: str,
+        selected_options: list[SelectedOptionInput],
+    ) -> tuple[list[dict], float]:
+        """
+        Validate selected options belong to the menu item and snapshot their details.
+
+        Returns:
+            tuple of (snapshot list, total option price delta)
+        """
+        if not selected_options:
+            return [], 0.0
+
+        snapshot: list[dict] = []
+        total_delta = 0.0
+
+        for sel in selected_options:
+            # Verify option group belongs to menu item
+            group_result = await self.db.execute(
+                select(MenuItemOptionGroup).where(
+                    MenuItemOptionGroup.id == sel.option_group_id,
+                    MenuItemOptionGroup.menu_item_id == menu_item_id,
+                    MenuItemOptionGroup.is_deleted == False,
+                )
+            )
+            group = group_result.scalar_one_or_none()
+            if not group:
+                raise ValidationError(
+                    message=f"Option group '{sel.option_group_id}' not found for this menu item"
+                )
+
+            # Verify option belongs to the group
+            option_result = await self.db.execute(
+                select(MenuItemOption).where(
+                    MenuItemOption.id == sel.option_id,
+                    MenuItemOption.option_group_id == sel.option_group_id,
+                    MenuItemOption.is_deleted == False,
+                )
+            )
+            option = option_result.scalar_one_or_none()
+            if not option:
+                raise ValidationError(
+                    message=f"Option '{sel.option_id}' not found in group '{sel.option_group_id}'"
+                )
+
+            snapshot.append(
+                {
+                    "option_group_id": group.id,
+                    "option_group_name": group.name,
+                    "option_id": option.id,
+                    "option_name": option.name,
+                    "price_delta": option.price_delta,
+                }
+            )
+            total_delta += option.price_delta
+
+        return snapshot, total_delta
+
     async def create_order(
         self,
         user_id: str,
@@ -33,11 +100,18 @@ class OrderService:
         Steps:
         1. Validate merchant is active
         2. Validate menu items exist and are available
-        3. Calculate totals
-        4. Create order and items
-        5. Emit OrderCreatedEvent
+        3. Validate and snapshot selected options per item
+        4. Calculate totals (base_price + option_deltas) * quantity
+        5. Create order and items with selected_options JSON
+        6. Emit OrderCreatedEvent
         """
-        # TODO: Implement
+        # TODO: Implement full order creation
+        # For each item in data.items:
+        #   - Fetch MenuItem, verify it belongs to merchant and is available
+        #   - Call _validate_and_snapshot_options for selected_options
+        #   - Compute item price = menu_item.price + options_delta
+        #   - Compute item subtotal = price * quantity
+        #   - Create OrderItem with selected_options=json.dumps(snapshot)
         raise NotImplementedError()
 
     async def get_order_by_id(self, order_id: str) -> OrderResponse | None:

@@ -2,6 +2,8 @@
 # Merchant Module - Pydantic Schemas
 # =============================================================================
 
+from typing import Literal
+
 from pydantic import Field
 
 from app.shared.dto import BaseDTO, TimestampMixin
@@ -134,3 +136,77 @@ class AdminMerchantDetailResponse(BaseDTO):
 
     merchant: AdminMerchantResponse
     menu: MenuListResponse
+
+
+# =============================================================================
+# Menu Item Option Group & Option schemas
+# =============================================================================
+
+
+class OptionCreate(BaseDTO):
+    """Create option request."""
+
+    name: str = Field(min_length=1, max_length=100)
+    price_delta: float = Field(default=0.0)
+    sort_order: int = Field(default=0, ge=0)
+    is_available: bool = True
+
+
+class OptionUpdate(BaseDTO):
+    """Update option request."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    price_delta: float | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+    is_available: bool | None = None
+
+
+class OptionResponse(BaseDTO, TimestampMixin):
+    """Option response."""
+
+    id: str
+    option_group_id: str
+    name: str
+    price_delta: float
+    sort_order: int
+    is_available: bool
+
+
+class OptionGroupCreate(BaseDTO):
+    """Create option group request."""
+
+    name: str = Field(min_length=1, max_length=100)
+    selection_type: Literal["single", "multiple"] = "single"
+    sort_order: int = Field(default=0, ge=0)
+    is_required: bool = False
+
+
+class OptionGroupUpdate(BaseDTO):
+    """Update option group request."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    selection_type: Literal["single", "multiple"] | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+    is_required: bool | None = None
+
+
+class OptionGroupResponse(BaseDTO, TimestampMixin):
+    """Option group response with nested options."""
+
+    id: str
+    menu_item_id: str
+    name: str
+    selection_type: str
+    sort_order: int
+    is_required: bool
+    options: list[OptionResponse] = []
+
+
+class MenuItemDetailResponse(MenuItemBase, TimestampMixin):
+    """Menu item detail response with nested option groups."""
+
+    id: str
+    merchant_id: str
+    image_url: str | None = None
+    is_featured: bool
+    option_groups: list[OptionGroupResponse] = []

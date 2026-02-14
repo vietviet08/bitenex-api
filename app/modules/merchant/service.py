@@ -14,17 +14,29 @@ from app.core.exceptions import (
     NotFoundError,
     ValidationError,
 )
-from app.modules.merchant.models import MenuItem, Merchant
+from app.modules.merchant.models import (
+    MenuItem,
+    MenuItemOption,
+    MenuItemOptionGroup,
+    Merchant,
+)
 from app.modules.merchant.schemas import (
     AdminMerchantDetailResponse,
     AdminMerchantResponse,
     MenuItemCreate,
+    MenuItemDetailResponse,
     MenuListResponse,
     MenuItemResponse,
     MenuItemUpdate,
     MerchantCreate,
     MerchantResponse,
     MerchantUpdate,
+    OptionCreate,
+    OptionGroupCreate,
+    OptionGroupResponse,
+    OptionGroupUpdate,
+    OptionResponse,
+    OptionUpdate,
 )
 from app.modules.user.models import User
 from app.shared.enums import MerchantStatus
@@ -54,7 +66,9 @@ class MerchantService:
         has_required_text = all(
             value is not None and str(value).strip() for value in required_text
         )
-        has_coordinates = merchant.latitude is not None and merchant.longitude is not None
+        has_coordinates = (
+            merchant.latitude is not None and merchant.longitude is not None
+        )
         has_business_settings = (
             merchant.min_order_amount is not None
             and merchant.delivery_fee is not None
@@ -239,22 +253,32 @@ class MerchantService:
         """Update merchant profile."""
         self._raise_field_validation_error(
             {
-                "latitude": "Latitude must be between -90 and 90"
-                if data.latitude is not None and not -90 <= data.latitude <= 90
-                else "",
-                "longitude": "Longitude must be between -180 and 180"
-                if data.longitude is not None and not -180 <= data.longitude <= 180
-                else "",
-                "min_order_amount": "Minimum order amount must be >= 0"
-                if data.min_order_amount is not None and data.min_order_amount < 0
-                else "",
-                "delivery_fee": "Delivery fee must be >= 0"
-                if data.delivery_fee is not None and data.delivery_fee < 0
-                else "",
-                "estimated_prep_time": "Estimated prep time must be between 1 and 300 minutes"
-                if data.estimated_prep_time is not None
-                and not 1 <= data.estimated_prep_time <= 300
-                else "",
+                "latitude": (
+                    "Latitude must be between -90 and 90"
+                    if data.latitude is not None and not -90 <= data.latitude <= 90
+                    else ""
+                ),
+                "longitude": (
+                    "Longitude must be between -180 and 180"
+                    if data.longitude is not None and not -180 <= data.longitude <= 180
+                    else ""
+                ),
+                "min_order_amount": (
+                    "Minimum order amount must be >= 0"
+                    if data.min_order_amount is not None and data.min_order_amount < 0
+                    else ""
+                ),
+                "delivery_fee": (
+                    "Delivery fee must be >= 0"
+                    if data.delivery_fee is not None and data.delivery_fee < 0
+                    else ""
+                ),
+                "estimated_prep_time": (
+                    "Estimated prep time must be between 1 and 300 minutes"
+                    if data.estimated_prep_time is not None
+                    and not 1 <= data.estimated_prep_time <= 300
+                    else ""
+                ),
             }
         )
         merchant = await self._get_merchant_model_by_id(merchant_id, active_only=False)
@@ -423,7 +447,9 @@ class MerchantService:
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[list[MenuItemResponse], int]:
-        await self._get_merchant_model_by_id(merchant_id, active_only=active_only_merchant)
+        await self._get_merchant_model_by_id(
+            merchant_id, active_only=active_only_merchant
+        )
 
         filters = [
             MenuItem.merchant_id == merchant_id,
@@ -586,3 +612,280 @@ class MerchantService:
             per_page=500,
         )
         return items
+
+    # =========================================================================
+    # Menu Item Detail (public)
+    # =========================================================================
+
+    async def get_menu_item_detail(
+        self,
+        merchant_id: str,
+        item_id: str,
+    ) -> MenuItemDetailResponse:
+        """Get a single menu item with its option groups and options."""
+        await self._get_merchant_model_by_id(merchant_id, active_only=True)
+        item = await self._get_menu_item_model(item_id)
+        if item.merchant_id != merchant_id:
+            raise NotFoundError(message="Menu item not found")
+
+        option_groups = await self._get_option_groups_with_options(item_id)
+
+        response = MenuItemDetailResponse.model_validate(item)
+        response.option_groups = option_groups
+        return response
+
+    async def _get_option_groups_with_options(
+        self,
+        menu_item_id: str,
+    ) -> list[OptionGroupResponse]:
+        """Fetch option groups with nested options for a menu item."""
+        groups_result = await self.db.execute(
+            select(MenuItemOptionGroup)
+            .where(
+                MenuItemOptionGroup.menu_item_id == menu_item_id,
+                MenuItemOptionGroup.is_deleted == False,
+            )
+            .order_by(MenuItemOptionGroup.sort_order)
+        )
+        groups = groups_result.scalars().all()
+
+        result: list[OptionGroupResponse] = []
+        for group in groups:
+            options_result = await self.db.execute(
+                select(MenuItemOption)
+                .where(
+                    MenuItemOption.option_group_id == group.id,
+                    MenuItemOption.is_deleted == False,
+                )
+                .order_by(MenuItemOption.sort_order)
+            )
+            options = options_result.scalars().all()
+
+            group_response = OptionGroupResponse.model_validate(group)
+            group_response.options = [
+                OptionResponse.model_validate(opt) for opt in options
+            ]
+            result.append(group_response)
+
+        return result
+
+    # =========================================================================
+    # Option Group CRUD (merchant owner)
+    # =========================================================================
+
+    async def _verify_menu_item_ownership(
+        self,
+        item_id: str,
+        actor_merchant_id: str,
+    ) -> MenuItem:
+        """Verify the menu item exists and belongs to the merchant."""
+        item = await self._get_menu_item_model(item_id)
+        if item.merchant_id != actor_merchant_id:
+            raise AuthorizationError(
+                message="You can only manage options for your own menu items"
+            )
+        return item
+
+    async def _get_option_group_model(
+        self,
+        group_id: str,
+    ) -> MenuItemOptionGroup:
+        """Get option group by ID."""
+        result = await self.db.execute(
+            select(MenuItemOptionGroup).where(
+                MenuItemOptionGroup.id == group_id,
+                MenuItemOptionGroup.is_deleted == False,
+            )
+        )
+        group = result.scalar_one_or_none()
+        if not group:
+            raise NotFoundError(message="Option group not found")
+        return group
+
+    async def _get_option_model(
+        self,
+        option_id: str,
+    ) -> MenuItemOption:
+        """Get option by ID."""
+        result = await self.db.execute(
+            select(MenuItemOption).where(
+                MenuItemOption.id == option_id,
+                MenuItemOption.is_deleted == False,
+            )
+        )
+        option = result.scalar_one_or_none()
+        if not option:
+            raise NotFoundError(message="Option not found")
+        return option
+
+    async def create_option_group(
+        self,
+        item_id: str,
+        data: OptionGroupCreate,
+        actor_merchant_id: str,
+    ) -> OptionGroupResponse:
+        """Create an option group for a menu item."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+
+        group = MenuItemOptionGroup(
+            menu_item_id=item_id,
+            name=data.name,
+            selection_type=data.selection_type,
+            sort_order=data.sort_order,
+            is_required=data.is_required,
+        )
+        self.db.add(group)
+        await self.db.flush()
+        await self.db.refresh(group)
+
+        response = OptionGroupResponse.model_validate(group)
+        response.options = []
+        return response
+
+    async def list_option_groups(
+        self,
+        item_id: str,
+        actor_merchant_id: str,
+    ) -> list[OptionGroupResponse]:
+        """List option groups with options for a menu item (owner)."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+        return await self._get_option_groups_with_options(item_id)
+
+    async def update_option_group(
+        self,
+        item_id: str,
+        group_id: str,
+        data: OptionGroupUpdate,
+        actor_merchant_id: str,
+    ) -> OptionGroupResponse:
+        """Update an option group."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+        group = await self._get_option_group_model(group_id)
+
+        if group.menu_item_id != item_id:
+            raise NotFoundError(message="Option group not found")
+
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(group, field, value)
+
+        await self.db.flush()
+        await self.db.refresh(group)
+
+        # Re-fetch with options
+        options_result = await self.db.execute(
+            select(MenuItemOption)
+            .where(
+                MenuItemOption.option_group_id == group.id,
+                MenuItemOption.is_deleted == False,
+            )
+            .order_by(MenuItemOption.sort_order)
+        )
+        options = options_result.scalars().all()
+
+        response = OptionGroupResponse.model_validate(group)
+        response.options = [OptionResponse.model_validate(opt) for opt in options]
+        return response
+
+    async def delete_option_group(
+        self,
+        item_id: str,
+        group_id: str,
+        actor_merchant_id: str,
+    ) -> None:
+        """Delete an option group and cascade to its options."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+        group = await self._get_option_group_model(group_id)
+
+        if group.menu_item_id != item_id:
+            raise NotFoundError(message="Option group not found")
+
+        # Soft-delete all options in the group
+        options_result = await self.db.execute(
+            select(MenuItemOption).where(
+                MenuItemOption.option_group_id == group_id,
+                MenuItemOption.is_deleted == False,
+            )
+        )
+        for option in options_result.scalars().all():
+            option.soft_delete()
+
+        group.soft_delete()
+        await self.db.flush()
+
+    # =========================================================================
+    # Option CRUD (within a group)
+    # =========================================================================
+
+    async def create_option(
+        self,
+        item_id: str,
+        group_id: str,
+        data: OptionCreate,
+        actor_merchant_id: str,
+    ) -> OptionResponse:
+        """Create an option within an option group."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+        group = await self._get_option_group_model(group_id)
+        if group.menu_item_id != item_id:
+            raise NotFoundError(message="Option group not found")
+
+        option = MenuItemOption(
+            option_group_id=group_id,
+            name=data.name,
+            price_delta=data.price_delta,
+            sort_order=data.sort_order,
+            is_available=data.is_available,
+        )
+        self.db.add(option)
+        await self.db.flush()
+        await self.db.refresh(option)
+
+        return OptionResponse.model_validate(option)
+
+    async def update_option(
+        self,
+        item_id: str,
+        group_id: str,
+        option_id: str,
+        data: OptionUpdate,
+        actor_merchant_id: str,
+    ) -> OptionResponse:
+        """Update an option."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+        group = await self._get_option_group_model(group_id)
+        if group.menu_item_id != item_id:
+            raise NotFoundError(message="Option group not found")
+
+        option = await self._get_option_model(option_id)
+        if option.option_group_id != group_id:
+            raise NotFoundError(message="Option not found")
+
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(option, field, value)
+
+        await self.db.flush()
+        await self.db.refresh(option)
+
+        return OptionResponse.model_validate(option)
+
+    async def delete_option(
+        self,
+        item_id: str,
+        group_id: str,
+        option_id: str,
+        actor_merchant_id: str,
+    ) -> None:
+        """Delete an option."""
+        await self._verify_menu_item_ownership(item_id, actor_merchant_id)
+        group = await self._get_option_group_model(group_id)
+        if group.menu_item_id != item_id:
+            raise NotFoundError(message="Option group not found")
+
+        option = await self._get_option_model(option_id)
+        if option.option_group_id != group_id:
+            raise NotFoundError(message="Option not found")
+
+        option.soft_delete()
+        await self.db.flush()
