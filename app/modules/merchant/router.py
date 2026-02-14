@@ -167,7 +167,12 @@ async def update_menu_item(
     service: MerchantService = Depends(get_merchant_service),
 ) -> MenuItemResponse:
     """Update menu item."""
-    return await service.update_menu_item(item_id, data)
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    return await service.update_menu_item(
+        item_id,
+        data,
+        actor_merchant_id=merchant.id,
+    )
 
 
 @router.delete(
@@ -182,7 +187,11 @@ async def delete_menu_item(
     service: MerchantService = Depends(get_merchant_service),
 ) -> MessageResponse:
     """Delete menu item."""
-    await service.delete_menu_item(item_id)
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    await service.delete_menu_item(
+        item_id,
+        actor_merchant_id=merchant.id,
+    )
     return MessageResponse(message="Menu item deleted")
 
 
@@ -197,7 +206,8 @@ async def delete_menu_item(
 )
 async def approve_merchant(
     merchant_id: str,
+    user: CurrentUser,
     service: MerchantService = Depends(get_merchant_service),
 ) -> MerchantResponse:
     """Approve a merchant application. Admin only."""
-    return await service.approve_merchant(merchant_id)
+    return await service.approve_merchant(merchant_id, approved_by=user.user_id)
