@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin, RequireMerchant
 from app.modules.merchant.schemas import (
+    AdminMerchantDetailResponse,
     AdminMerchantListResponse,
     MenuItemCreate,
+    MenuListResponse,
     MenuItemResponse,
     MenuItemUpdate,
     MerchantListResponse,
@@ -100,10 +102,16 @@ async def get_merchant_by_slug(
 )
 async def get_menu(
     merchant_id: str,
+    category: str | None = Query(default=None),
+    available_only: bool | None = Query(default=None),
     service: MerchantService = Depends(get_merchant_service),
 ) -> list[MenuItemResponse]:
     """Get merchant's menu."""
-    return await service.get_menu(merchant_id)
+    return await service.get_menu(
+        merchant_id,
+        category=category,
+        is_available=available_only,
+    )
 
 
 # =============================================================================
@@ -137,6 +145,30 @@ async def update_my_merchant(
     """Update current merchant's profile."""
     merchant = await service.get_merchant_by_user_id(user.user_id)
     return await service.update_merchant(merchant.id, data)
+
+
+@router.get(
+    "/owner/menu/list",
+    response_model=MenuListResponse,
+    summary="List my menu items",
+    dependencies=[RequireMerchant],
+)
+async def list_owner_menu(
+    user: CurrentUser,
+    category: str | None = Query(default=None),
+    available_only: bool | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    service: MerchantService = Depends(get_merchant_service),
+) -> MenuListResponse:
+    """List current merchant's menu with pagination and filters."""
+    return await service.get_owner_menu(
+        user.user_id,
+        category=category,
+        is_available=available_only,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.post(
@@ -219,6 +251,30 @@ async def admin_list_merchants(
         per_page=per_page,
     )
     return AdminMerchantListResponse(items=items, total=total)
+
+
+@router.get(
+    "/admin/{merchant_id}",
+    response_model=AdminMerchantDetailResponse,
+    summary="Admin merchant detail",
+    dependencies=[RequireAdmin],
+)
+async def admin_get_merchant_detail(
+    merchant_id: str,
+    category: str | None = Query(default=None),
+    available_only: bool | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    service: MerchantService = Depends(get_merchant_service),
+) -> AdminMerchantDetailResponse:
+    """Get merchant detail with menu context for admin dashboards."""
+    return await service.get_admin_merchant_detail(
+        merchant_id,
+        category=category,
+        is_available=available_only,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.post(

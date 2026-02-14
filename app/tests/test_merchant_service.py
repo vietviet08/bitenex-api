@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from app.core.exceptions import AuthorizationError, NotFoundError
 from app.modules.merchant.models import MenuItem, Merchant
@@ -149,6 +150,14 @@ async def test_create_and_update_merchant(db_session):
     assert updated.delivery_fee == pytest.approx(3.0)
     assert updated.is_profile_complete is True
 
+    with pytest.raises(PydanticValidationError):
+        await service.update_merchant(
+            created.id,
+            MerchantUpdate(
+                latitude=999,
+            ),
+        )
+
 
 @pytest.mark.asyncio
 async def test_menu_crud_with_ownership_rules(db_session):
@@ -245,3 +254,103 @@ async def test_list_admin_merchants_with_owner_metadata(db_session):
     assert items[0].id == merchant.id
     assert items[0].owner_email == owner.email
     assert items[0].owner_full_name == owner.full_name
+
+
+@pytest.mark.asyncio
+async def test_admin_merchant_detail_with_menu_context_and_empty_state(db_session):
+    service = MerchantService(db_session)
+
+    owner = User(
+        email="detail-owner@example.com",
+        password_hash="hashed",
+        full_name="Detail Owner",
+        role="MERCHANT",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(owner)
+    await db_session.flush()
+
+    merchant = Merchant(
+        user_id=owner.id,
+        name="Detail Merchant",
+        slug="detail-merchant",
+        address="200 Detail St",
+        city="Hue",
+        status=MerchantStatus.ACTIVE.value,
+    )
+    db_session.add(merchant)
+    await db_session.flush()
+
+    detail_empty = await service.get_admin_merchant_detail(merchant.id)
+    assert detail_empty.merchant.id == merchant.id
+    assert detail_empty.menu.total == 0
+    assert detail_empty.menu.items == []
+
+    await service.add_menu_item(
+        merchant.id,
+        MenuItemCreate(
+            name="Com Tam",
+            description="Broken rice",
+            price=2.5,
+            category="Rice",
+            is_available=True,
+        ),
+    )
+
+    detail_with_menu = await service.get_admin_merchant_detail(
+        merchant.id,
+        category="rice",
+        page=1,
+        per_page=10,
+    )
+    assert detail_with_menu.menu.total == 1
+    assert detail_with_menu.menu.items[0].name == "Com Tam"
+
+
+@pytest.mark.asyncio
+async def test_get_owner_menu_respects_filters(db_session):
+    service = MerchantService(db_session)
+
+    merchant = Merchant(
+        user_id="merchant-owner-filter",
+        name="Filter Merchant",
+        slug="filter-merchant",
+        address="301 Filter St",
+        city="Da Nang",
+        status=MerchantStatus.PENDING.value,
+    )
+    db_session.add(merchant)
+    await db_session.flush()
+
+    await service.add_menu_item(
+        merchant.id,
+        MenuItemCreate(
+            name="Iced Tea",
+            description="Fresh tea",
+            price=1.25,
+            category="Drinks",
+            is_available=True,
+        ),
+    )
+    await service.add_menu_item(
+        merchant.id,
+        MenuItemCreate(
+            name="Hidden Dish",
+            description="Unavailable dish",
+            price=3.25,
+            category="Main",
+            is_available=False,
+        ),
+    )
+
+    filtered = await service.get_owner_menu(
+        merchant.user_id,
+        is_available=True,
+        category="drink",
+        page=1,
+        per_page=20,
+    )
+    assert filtered.total == 1
+    assert len(filtered.items) == 1
+    assert filtered.items[0].name == "Iced Tea"

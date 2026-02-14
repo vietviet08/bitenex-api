@@ -8,11 +8,18 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import MerchantApprovedEvent, emit_event
-from app.core.exceptions import AuthorizationError, ConflictError, NotFoundError
+from app.core.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.merchant.schemas import (
+    AdminMerchantDetailResponse,
     AdminMerchantResponse,
     MenuItemCreate,
+    MenuListResponse,
     MenuItemResponse,
     MenuItemUpdate,
     MerchantCreate,
@@ -78,6 +85,16 @@ class MerchantService:
     @staticmethod
     def _to_menu_item_response(item: MenuItem) -> MenuItemResponse:
         return MenuItemResponse.model_validate(item)
+
+    @staticmethod
+    def _raise_field_validation_error(details: dict[str, str]) -> None:
+        normalized = {
+            field: [{"type": "value_error", "message": message}]
+            for field, message in details.items()
+            if message
+        }
+        if normalized:
+            raise ValidationError(message="Validation failed", details=normalized)
 
     async def _get_merchant_model_by_id(
         self,
@@ -220,6 +237,26 @@ class MerchantService:
         data: MerchantUpdate,
     ) -> MerchantResponse:
         """Update merchant profile."""
+        self._raise_field_validation_error(
+            {
+                "latitude": "Latitude must be between -90 and 90"
+                if data.latitude is not None and not -90 <= data.latitude <= 90
+                else "",
+                "longitude": "Longitude must be between -180 and 180"
+                if data.longitude is not None and not -180 <= data.longitude <= 180
+                else "",
+                "min_order_amount": "Minimum order amount must be >= 0"
+                if data.min_order_amount is not None and data.min_order_amount < 0
+                else "",
+                "delivery_fee": "Delivery fee must be >= 0"
+                if data.delivery_fee is not None and data.delivery_fee < 0
+                else "",
+                "estimated_prep_time": "Estimated prep time must be between 1 and 300 minutes"
+                if data.estimated_prep_time is not None
+                and not 1 <= data.estimated_prep_time <= 300
+                else "",
+            }
+        )
         merchant = await self._get_merchant_model_by_id(merchant_id, active_only=False)
 
         update_data = data.model_dump(exclude_unset=True)
@@ -376,6 +413,102 @@ class MerchantService:
         ]
         return items, total
 
+    async def list_menu_items(
+        self,
+        merchant_id: str,
+        *,
+        active_only_merchant: bool,
+        category: str | None = None,
+        is_available: bool | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[MenuItemResponse], int]:
+        await self._get_merchant_model_by_id(merchant_id, active_only=active_only_merchant)
+
+        filters = [
+            MenuItem.merchant_id == merchant_id,
+            MenuItem.is_deleted == False,
+        ]
+        if category:
+            filters.append(MenuItem.category.ilike(f"%{category.strip()}%"))
+        if is_available is not None:
+            filters.append(MenuItem.is_available == is_available)
+
+        query = (
+            select(MenuItem)
+            .where(*filters)
+            .order_by(MenuItem.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        count_query = select(func.count(MenuItem.id)).where(*filters)
+
+        items = (await self.db.execute(query)).scalars().all()
+        total = (await self.db.execute(count_query)).scalar_one()
+        return [self._to_menu_item_response(item) for item in items], total
+
+    async def get_owner_menu(
+        self,
+        owner_user_id: str,
+        *,
+        category: str | None = None,
+        is_available: bool | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> MenuListResponse:
+        merchant = await self._get_merchant_model_by_user_id(owner_user_id)
+        items, total = await self.list_menu_items(
+            merchant.id,
+            active_only_merchant=False,
+            category=category,
+            is_available=is_available,
+            page=page,
+            per_page=per_page,
+        )
+        return MenuListResponse(items=items, total=total, page=page, per_page=per_page)
+
+    async def get_admin_merchant_detail(
+        self,
+        merchant_id: str,
+        *,
+        category: str | None = None,
+        is_available: bool | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> AdminMerchantDetailResponse:
+        merchant = await self._get_merchant_model_by_id(merchant_id, active_only=False)
+        owner_row = (
+            await self.db.execute(
+                select(User.email, User.full_name).where(
+                    User.id == merchant.user_id,
+                    User.is_deleted == False,
+                )
+            )
+        ).one_or_none()
+
+        menu_items, total = await self.list_menu_items(
+            merchant.id,
+            active_only_merchant=False,
+            category=category,
+            is_available=is_available,
+            page=page,
+            per_page=per_page,
+        )
+
+        return AdminMerchantDetailResponse(
+            merchant=self._to_admin_merchant_response(
+                merchant=merchant,
+                owner_email=owner_row[0] if owner_row else None,
+                owner_full_name=owner_row[1] if owner_row else None,
+            ),
+            menu=MenuListResponse(
+                items=menu_items,
+                total=total,
+                page=page,
+                per_page=per_page,
+            ),
+        )
+
     # Menu management
     async def add_menu_item(
         self,
@@ -436,17 +569,20 @@ class MerchantService:
         item.soft_delete()
         await self.db.flush()
 
-    async def get_menu(self, merchant_id: str) -> list[MenuItemResponse]:
+    async def get_menu(
+        self,
+        merchant_id: str,
+        *,
+        category: str | None = None,
+        is_available: bool | None = None,
+    ) -> list[MenuItemResponse]:
         """Get merchant's menu."""
-        await self._get_merchant_model_by_id(merchant_id, active_only=True)
-
-        result = await self.db.execute(
-            select(MenuItem)
-            .where(
-                MenuItem.merchant_id == merchant_id,
-                MenuItem.is_deleted == False,
-            )
-            .order_by(MenuItem.created_at.desc())
+        items, _ = await self.list_menu_items(
+            merchant_id,
+            active_only_merchant=True,
+            category=category,
+            is_available=is_available,
+            page=1,
+            per_page=500,
         )
-        items = result.scalars().all()
-        return [self._to_menu_item_response(i) for i in items]
+        return items

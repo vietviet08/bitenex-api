@@ -11,14 +11,14 @@ from app.shared.enums import MerchantStatus
 class MerchantBase(BaseDTO):
     """Base merchant fields."""
 
-    name: str = Field(max_length=100)
+    name: str = Field(min_length=1, max_length=100)
     description: str | None = None
-    address: str = Field(max_length=255)
-    city: str = Field(max_length=100)
+    address: str = Field(min_length=1, max_length=255)
+    city: str = Field(min_length=1, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
-    min_order_amount: float = 0.0
-    delivery_fee: float = 0.0
-    estimated_prep_time: int = 30
+    min_order_amount: float = Field(default=0.0, ge=0)
+    delivery_fee: float = Field(default=0.0, ge=0)
+    estimated_prep_time: int = Field(default=30, ge=1, le=300)
 
 
 class MerchantCreate(MerchantBase):
@@ -32,18 +32,18 @@ class MerchantCreate(MerchantBase):
 class MerchantUpdate(BaseDTO):
     """Update merchant request."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = None
-    address: str | None = None
-    city: str | None = None
-    phone: str | None = None
+    address: str | None = Field(default=None, min_length=1, max_length=255)
+    city: str | None = Field(default=None, min_length=1, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
     logo_url: str | None = None
     cover_image_url: str | None = None
-    latitude: float | None = None
-    longitude: float | None = None
-    min_order_amount: float | None = None
-    delivery_fee: float | None = None
-    estimated_prep_time: int | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    min_order_amount: float | None = Field(default=None, ge=0)
+    delivery_fee: float | None = Field(default=None, ge=0)
+    estimated_prep_time: int | None = Field(default=None, ge=1, le=300)
 
 
 class MerchantResponse(MerchantBase, TimestampMixin):
@@ -88,7 +88,7 @@ class AdminMerchantListResponse(BaseDTO):
 class MenuItemBase(BaseDTO):
     """Base menu item fields."""
 
-    name: str = Field(max_length=100)
+    name: str = Field(min_length=1, max_length=100)
     description: str | None = None
     price: float = Field(gt=0)
     category: str | None = Field(default=None, max_length=50)
@@ -104,10 +104,10 @@ class MenuItemCreate(MenuItemBase):
 class MenuItemUpdate(BaseDTO):
     """Update menu item request."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = None
-    price: float | None = None
-    category: str | None = None
+    price: float | None = Field(default=None, gt=0)
+    category: str | None = Field(default=None, max_length=50)
     is_available: bool | None = None
 
 
@@ -118,3 +118,19 @@ class MenuItemResponse(MenuItemBase, TimestampMixin):
     merchant_id: str
     image_url: str | None = None
     is_featured: bool
+
+
+class MenuListResponse(BaseDTO):
+    """Paginated menu list response."""
+
+    items: list[MenuItemResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+class AdminMerchantDetailResponse(BaseDTO):
+    """Admin merchant detail response with merchant profile and menu context."""
+
+    merchant: AdminMerchantResponse
+    menu: MenuListResponse
