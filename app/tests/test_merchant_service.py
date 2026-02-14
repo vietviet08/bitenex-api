@@ -133,7 +133,7 @@ async def test_create_and_update_merchant(db_session):
         MerchantUpdate(name="Merchant Updated", delivery_fee=3.0),
     )
     assert updated.name == "Merchant Updated"
-    assert updated.delivery_fee == 3.0
+    assert updated.delivery_fee == pytest.approx(3.0)
 
 
 @pytest.mark.asyncio
@@ -176,7 +176,7 @@ async def test_menu_crud_with_ownership_rules(db_session):
         MenuItemUpdate(price=12.0),
         actor_merchant_id=owner.id,
     )
-    assert updated.price == 12.0
+    assert updated.price == pytest.approx(12.0)
 
     with pytest.raises(AuthorizationError):
         await service.update_menu_item(

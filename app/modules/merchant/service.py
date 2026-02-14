@@ -27,6 +27,8 @@ class MerchantService:
     Handles merchant profiles and menu management.
     """
 
+    _MERCHANT_NOT_FOUND = "Merchant not found"
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -54,7 +56,7 @@ class MerchantService:
         result = await self.db.execute(select(Merchant).where(*filters))
         merchant = result.scalar_one_or_none()
         if not merchant:
-            raise NotFoundError(message="Merchant not found")
+            raise NotFoundError(message=self._MERCHANT_NOT_FOUND)
         return merchant
 
     async def _get_merchant_model_by_slug(
@@ -73,7 +75,7 @@ class MerchantService:
         result = await self.db.execute(select(Merchant).where(*filters))
         merchant = result.scalar_one_or_none()
         if not merchant:
-            raise NotFoundError(message="Merchant not found")
+            raise NotFoundError(message=self._MERCHANT_NOT_FOUND)
         return merchant
 
     async def _get_merchant_model_by_user_id(self, user_id: str) -> Merchant:
@@ -85,7 +87,7 @@ class MerchantService:
         )
         merchant = result.scalar_one_or_none()
         if not merchant:
-            raise NotFoundError(message="Merchant not found")
+            raise NotFoundError(message=self._MERCHANT_NOT_FOUND)
         return merchant
 
     async def _get_menu_item_model(
@@ -226,9 +228,11 @@ class MerchantService:
                 .where(*filters, category_filter)
             )
 
-        merchant_query = merchant_query.order_by(Merchant.created_at.desc()).offset(
-            (page - 1) * per_page
-        ).limit(per_page)
+        merchant_query = (
+            merchant_query.order_by(Merchant.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
 
         merchants_result = await self.db.execute(merchant_query)
         merchants = merchants_result.scalars().all()
@@ -241,8 +245,8 @@ class MerchantService:
     async def search_merchants(
         self,
         query: str,
-        latitude: float | None = None,
-        longitude: float | None = None,
+        _latitude: float | None = None,
+        _longitude: float | None = None,
     ) -> list[MerchantResponse]:
         """Search merchants by name."""
         term = query.strip()
