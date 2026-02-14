@@ -62,6 +62,15 @@ class DriverAssignedEvent(Event):
     driver_id: str = ""
 
 
+@dataclass
+class MerchantApprovedEvent(Event):
+    """Emitted when a merchant application is approved."""
+
+    merchant_id: str = ""
+    owner_user_id: str = ""
+    approved_by: str = ""
+
+
 EventHandler = Callable[[Event], Awaitable[None]]
 
 
