@@ -11,12 +11,19 @@ from app.modules.merchant.schemas import (
     AdminMerchantDetailResponse,
     AdminMerchantListResponse,
     MenuItemCreate,
+    MenuItemDetailResponse,
     MenuListResponse,
     MenuItemResponse,
     MenuItemUpdate,
     MerchantListResponse,
     MerchantResponse,
     MerchantUpdate,
+    OptionCreate,
+    OptionGroupCreate,
+    OptionGroupResponse,
+    OptionGroupUpdate,
+    OptionResponse,
+    OptionUpdate,
 )
 from app.modules.merchant.service import MerchantService
 from app.shared.dto import MessageResponse
@@ -70,19 +77,6 @@ async def search_merchants(
 
 
 @router.get(
-    "/{merchant_id}",
-    response_model=MerchantResponse,
-    summary="Get merchant",
-)
-async def get_merchant(
-    merchant_id: str,
-    service: MerchantService = Depends(get_merchant_service),
-) -> MerchantResponse:
-    """Get merchant by ID."""
-    return await service.get_merchant_by_id(merchant_id)
-
-
-@router.get(
     "/slug/{slug}",
     response_model=MerchantResponse,
     summary="Get merchant by slug",
@@ -93,25 +87,6 @@ async def get_merchant_by_slug(
 ) -> MerchantResponse:
     """Get merchant by slug."""
     return await service.get_merchant_by_slug(slug)
-
-
-@router.get(
-    "/{merchant_id}/menu",
-    response_model=list[MenuItemResponse],
-    summary="Get menu",
-)
-async def get_menu(
-    merchant_id: str,
-    category: str | None = Query(default=None),
-    available_only: bool | None = Query(default=None),
-    service: MerchantService = Depends(get_merchant_service),
-) -> list[MenuItemResponse]:
-    """Get merchant's menu."""
-    return await service.get_menu(
-        merchant_id,
-        category=category,
-        is_available=available_only,
-    )
 
 
 # =============================================================================
@@ -230,6 +205,149 @@ async def delete_menu_item(
 
 
 # =============================================================================
+# Merchant Owner - Option Group Endpoints
+# =============================================================================
+@router.post(
+    "/owner/menu/{item_id}/option-groups",
+    response_model=OptionGroupResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create option group",
+    dependencies=[RequireMerchant],
+)
+async def create_option_group(
+    item_id: str,
+    data: OptionGroupCreate,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> OptionGroupResponse:
+    """Create an option group for a menu item."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    return await service.create_option_group(
+        item_id, data, actor_merchant_id=merchant.id
+    )
+
+
+@router.get(
+    "/owner/menu/{item_id}/option-groups",
+    response_model=list[OptionGroupResponse],
+    summary="List option groups",
+    dependencies=[RequireMerchant],
+)
+async def list_option_groups(
+    item_id: str,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> list[OptionGroupResponse]:
+    """List option groups with nested options for a menu item."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    return await service.list_option_groups(item_id, actor_merchant_id=merchant.id)
+
+
+@router.patch(
+    "/owner/menu/{item_id}/option-groups/{group_id}",
+    response_model=OptionGroupResponse,
+    summary="Update option group",
+    dependencies=[RequireMerchant],
+)
+async def update_option_group(
+    item_id: str,
+    group_id: str,
+    data: OptionGroupUpdate,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> OptionGroupResponse:
+    """Update an option group."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    return await service.update_option_group(
+        item_id, group_id, data, actor_merchant_id=merchant.id
+    )
+
+
+@router.delete(
+    "/owner/menu/{item_id}/option-groups/{group_id}",
+    response_model=MessageResponse,
+    summary="Delete option group",
+    dependencies=[RequireMerchant],
+)
+async def delete_option_group(
+    item_id: str,
+    group_id: str,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> MessageResponse:
+    """Delete an option group and its options."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    await service.delete_option_group(item_id, group_id, actor_merchant_id=merchant.id)
+    return MessageResponse(message="Option group deleted")
+
+
+# =============================================================================
+# Merchant Owner - Option Endpoints (within a group)
+# =============================================================================
+@router.post(
+    "/owner/menu/{item_id}/option-groups/{group_id}/options",
+    response_model=OptionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create option",
+    dependencies=[RequireMerchant],
+)
+async def create_option(
+    item_id: str,
+    group_id: str,
+    data: OptionCreate,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> OptionResponse:
+    """Create an option within an option group."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    return await service.create_option(
+        item_id, group_id, data, actor_merchant_id=merchant.id
+    )
+
+
+@router.patch(
+    "/owner/menu/{item_id}/option-groups/{group_id}/options/{option_id}",
+    response_model=OptionResponse,
+    summary="Update option",
+    dependencies=[RequireMerchant],
+)
+async def update_option(
+    item_id: str,
+    group_id: str,
+    option_id: str,
+    data: OptionUpdate,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> OptionResponse:
+    """Update an option."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    return await service.update_option(
+        item_id, group_id, option_id, data, actor_merchant_id=merchant.id
+    )
+
+
+@router.delete(
+    "/owner/menu/{item_id}/option-groups/{group_id}/options/{option_id}",
+    response_model=MessageResponse,
+    summary="Delete option",
+    dependencies=[RequireMerchant],
+)
+async def delete_option(
+    item_id: str,
+    group_id: str,
+    option_id: str,
+    user: CurrentUser,
+    service: MerchantService = Depends(get_merchant_service),
+) -> MessageResponse:
+    """Delete an option."""
+    merchant = await service.get_merchant_by_user_id(user.user_id)
+    await service.delete_option(
+        item_id, group_id, option_id, actor_merchant_id=merchant.id
+    )
+    return MessageResponse(message="Option deleted")
+
+
+# =============================================================================
 # Admin Endpoints
 # =============================================================================
 @router.get(
@@ -290,3 +408,52 @@ async def approve_merchant(
 ) -> MerchantResponse:
     """Approve a merchant application. Admin only."""
     return await service.approve_merchant(merchant_id, approved_by=user.user_id)
+
+
+# =============================================================================
+# Public Parameterized Endpoints (MUST be last – catch-all path params)
+# =============================================================================
+@router.get(
+    "/{merchant_id}",
+    response_model=MerchantResponse,
+    summary="Get merchant",
+)
+async def get_merchant(
+    merchant_id: str,
+    service: MerchantService = Depends(get_merchant_service),
+) -> MerchantResponse:
+    """Get merchant by ID."""
+    return await service.get_merchant_by_id(merchant_id)
+
+
+@router.get(
+    "/{merchant_id}/menu",
+    response_model=list[MenuItemResponse],
+    summary="Get menu",
+)
+async def get_menu(
+    merchant_id: str,
+    category: str | None = Query(default=None),
+    available_only: bool | None = Query(default=None),
+    service: MerchantService = Depends(get_merchant_service),
+) -> list[MenuItemResponse]:
+    """Get merchant's menu."""
+    return await service.get_menu(
+        merchant_id,
+        category=category,
+        is_available=available_only,
+    )
+
+
+@router.get(
+    "/{merchant_id}/menu/{item_id}",
+    response_model=MenuItemDetailResponse,
+    summary="Get menu item detail",
+)
+async def get_menu_item_detail(
+    merchant_id: str,
+    item_id: str,
+    service: MerchantService = Depends(get_merchant_service),
+) -> MenuItemDetailResponse:
+    """Get a single menu item with option groups and options."""
+    return await service.get_menu_item_detail(merchant_id, item_id)

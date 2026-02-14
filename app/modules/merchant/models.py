@@ -2,7 +2,7 @@
 # Merchant Module - ORM Models
 # =============================================================================
 
-from sqlalchemy import Boolean, Float, Integer, String, Text, Time
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel
@@ -190,5 +190,83 @@ class MenuItem(BaseModel):
     is_featured: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
+        nullable=False,
+    )
+
+
+class MenuItemOptionGroup(BaseModel):
+    """
+    Option group for a menu item (e.g., "Size", "Add-ons").
+    Each group contains multiple options.
+    """
+
+    __tablename__ = "menu_item_option_groups"
+
+    menu_item_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("menu_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    # 'single' = radio (pick one), 'multiple' = checkbox (pick many)
+    selection_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="single",
+    )
+
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    is_required: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+
+class MenuItemOption(BaseModel):
+    """
+    Individual option within an option group (e.g., "Large", "Extra Cheese").
+    """
+
+    __tablename__ = "menu_item_options"
+
+    option_group_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("menu_item_option_groups.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    price_delta: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+    )
+
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    is_available: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
         nullable=False,
     )
