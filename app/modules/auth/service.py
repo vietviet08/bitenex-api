@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
@@ -28,12 +29,14 @@ from app.modules.auth.schemas import (
     AuthUserResponse,
     LoginRequest,
     LoginResponse,
+    MerchantRegisterRequest,
     RegisterRequest,
     RegisterResponse,
     TokenResponse,
 )
+from app.modules.merchant.models import Merchant
 from app.modules.user.models import User
-from app.shared.enums import Role
+from app.shared.enums import MerchantStatus, Role
 from app.shared.utils import ensure_utc
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,8 @@ class AuthService:
     All authentication business logic should be implemented here.
     Routers should only call service methods, not implement logic.
     """
+
+    _USER_NOT_FOUND_MESSAGE = "User not found"
 
     def __init__(self, db: AsyncSession):
         """
@@ -100,6 +105,26 @@ class AuthService:
         await self.db.flush()
 
         return refresh_token
+
+    async def _generate_unique_merchant_slug(self, name: str) -> str:
+        base_slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        if not base_slug:
+            base_slug = "merchant"
+
+        candidate = base_slug
+        suffix = 1
+        while True:
+            result = await self.db.execute(
+                select(Merchant.id).where(
+                    Merchant.slug == candidate,
+                    Merchant.is_deleted == False,
+                )
+            )
+            exists = result.scalar_one_or_none()
+            if not exists:
+                return candidate
+            candidate = f"{base_slug}-{suffix}"
+            suffix += 1
 
     def _build_auth_user_response(self, user: User) -> AuthUserResponse:
         """Build AuthUserResponse from User model."""
@@ -169,6 +194,35 @@ class AuthService:
             user=self._build_auth_user_response(user),
         )
 
+    async def _register_user(
+        self,
+        request: RegisterRequest,
+        *,
+        role: Role = Role.USER,
+        is_verified: bool = False,
+    ) -> User:
+        """Create user account after duplicate checks."""
+        existing_user = await self._get_user_by_email(str(request.email))
+
+        if existing_user:
+            raise ConflictError(
+                message="Email already registered",
+                error_code="DUPLICATE",
+            )
+
+        user = User(
+            email=str(request.email).lower(),
+            password_hash=hash_password(request.password),
+            full_name=request.full_name,
+            phone=request.phone,
+            role=role.value,
+            is_active=True,
+            is_verified=is_verified,
+        )
+        self.db.add(user)
+        await self.db.flush()
+        return user
+
     async def register(self, request: RegisterRequest) -> RegisterResponse:
         """
         Register a new user.
@@ -182,31 +236,11 @@ class AuthService:
         Raises:
             ConflictError: If email already exists
         """
-        # 1. Check if email exists
-        existing_user = await self._get_user_by_email(str(request.email))
-
-        if existing_user:
-            raise ConflictError(
-                message="Email already registered",
-                error_code="DUPLICATE",
-            )
-
-        # 2. Hash password
-        password_hash = hash_password(request.password)
-
-        # 3. Create user record
-        user = User(
-            email=str(request.email).lower(),
-            password_hash=password_hash,
-            full_name=request.full_name,
-            phone=request.phone,
-            role=Role.USER.value,
-            is_active=True,
+        user = await self._register_user(
+            request,
+            role=Role.USER,
             is_verified=False,
         )
-
-        self.db.add(user)
-        await self.db.flush()
 
         # 4. Generate verification token
         verification_token = create_verification_token(user.id)
@@ -223,6 +257,44 @@ class AuthService:
         return RegisterResponse(
             user=self._build_auth_user_response(user),
             message="Registration successful. Please verify your email.",
+        )
+
+    async def register_merchant(
+        self,
+        request: MerchantRegisterRequest,
+    ) -> RegisterResponse:
+        """
+        Register a merchant owner and bootstrap a pending merchant profile.
+        """
+        user = await self._register_user(
+            request,
+            role=Role.MERCHANT,
+            is_verified=True,
+        )
+
+        business_name = (request.business_name or request.full_name).strip()
+        merchant = Merchant(
+            user_id=user.id,
+            name=business_name,
+            slug=await self._generate_unique_merchant_slug(business_name),
+            description=None,
+            address="Pending setup",
+            city="Pending",
+            phone=request.phone,
+            min_order_amount=0.0,
+            delivery_fee=0.0,
+            estimated_prep_time=30,
+            status=MerchantStatus.PENDING.value,
+        )
+
+        self.db.add(merchant)
+        await self.db.flush()
+
+        logger.info(f"Merchant owner {user.email} registered successfully")
+
+        return RegisterResponse(
+            user=self._build_auth_user_response(user),
+            message="Merchant registration successful. Waiting for admin approval.",
         )
 
     async def refresh_token(self, refresh_token: str) -> TokenResponse:
@@ -390,7 +462,7 @@ class AuthService:
         user = await self._get_user_by_id(user_id)
 
         if not user:
-            raise NotFoundError(message="User not found")
+            raise NotFoundError(message=self._USER_NOT_FOUND_MESSAGE)
 
         # 3. Set is_verified=True
         user.is_verified = True
@@ -455,7 +527,7 @@ class AuthService:
         user = await self._get_user_by_id(user_id)
 
         if not user:
-            raise NotFoundError(message="User not found")
+            raise NotFoundError(message=self._USER_NOT_FOUND_MESSAGE)
 
         # 3. Update password
         user.password_hash = hash_password(new_password)
@@ -487,7 +559,7 @@ class AuthService:
         user = await self._get_user_by_id(user_id)
 
         if not user:
-            raise NotFoundError(message="User not found")
+            raise NotFoundError(message=self._USER_NOT_FOUND_MESSAGE)
 
         # 2. Verify current password
         if not verify_password(current_password, user.password_hash):
@@ -514,6 +586,6 @@ class AuthService:
         user = await self._get_user_by_id(user_id)
 
         if not user:
-            raise NotFoundError(message="User not found")
+            raise NotFoundError(message=self._USER_NOT_FOUND_MESSAGE)
 
         return self._build_auth_user_response(user)
