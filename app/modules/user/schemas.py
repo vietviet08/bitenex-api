@@ -33,6 +33,16 @@ class UserUpdate(BaseDTO):
     avatar_url: str | None = None
 
 
+class AdminUserUpdate(BaseDTO):
+    """Admin update user request — can change role and active status."""
+
+    full_name: str | None = Field(default=None, min_length=2, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
+    role: Role | None = None
+    is_active: bool | None = None
+    is_verified: bool | None = None
+
+
 class UserResponse(UserBase, TimestampMixin):
     """User response."""
 
@@ -45,6 +55,13 @@ class UserResponse(UserBase, TimestampMixin):
 
 class UserListResponse(BaseDTO):
     """Paginated user list."""
+
+    items: list[UserResponse]
+    total: int
+
+
+class AdminUserListResponse(BaseDTO):
+    """Paginated admin user list."""
 
     items: list[UserResponse]
     total: int
