@@ -4,6 +4,7 @@ from app.core.exceptions import AuthorizationError, NotFoundError
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.merchant.schemas import MenuItemCreate, MenuItemUpdate, MerchantCreate, MerchantUpdate
 from app.modules.merchant.service import MerchantService
+from app.modules.user.models import User
 from app.shared.enums import MerchantStatus
 
 
@@ -86,6 +87,8 @@ async def test_merchant_retrieval_and_approval(db_session):
 
     approved = await service.approve_merchant(pending.id, approved_by="admin-1")
     assert approved.status == MerchantStatus.ACTIVE.value
+    approved_again = await service.approve_merchant(pending.id, approved_by="admin-1")
+    assert approved_again.status == MerchantStatus.ACTIVE.value
 
     by_id = await service.get_merchant_by_id(pending.id)
     by_slug = await service.get_merchant_by_slug(pending.slug)
@@ -130,10 +133,21 @@ async def test_create_and_update_merchant(db_session):
 
     updated = await service.update_merchant(
         created.id,
-        MerchantUpdate(name="Merchant Updated", delivery_fee=3.0),
+        MerchantUpdate(
+            name="Merchant Updated",
+                description="Updated description",
+                city="Ha Noi",
+                phone="+84901234567",
+                latitude=21.0285,
+                longitude=105.8542,
+            logo_url="https://cdn.test/logo.png",
+            cover_image_url="https://cdn.test/cover.png",
+            delivery_fee=3.0,
+        ),
     )
     assert updated.name == "Merchant Updated"
     assert updated.delivery_fee == pytest.approx(3.0)
+    assert updated.is_profile_complete is True
 
 
 @pytest.mark.asyncio
@@ -193,3 +207,41 @@ async def test_menu_crud_with_ownership_rules(db_session):
 
     with pytest.raises(AuthorizationError):
         await service.delete_menu_item(item.id, actor_merchant_id=other.id)
+
+
+@pytest.mark.asyncio
+async def test_list_admin_merchants_with_owner_metadata(db_session):
+    service = MerchantService(db_session)
+
+    owner = User(
+        email="merchant-owner@example.com",
+        password_hash="hashed",
+        full_name="Owner Name",
+        role="MERCHANT",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(owner)
+    await db_session.flush()
+
+    merchant = Merchant(
+        user_id=owner.id,
+        name="Pending for Admin",
+        slug="pending-for-admin",
+        address="100 Admin St",
+        city="HCM",
+        status=MerchantStatus.PENDING.value,
+    )
+    db_session.add(merchant)
+    await db_session.flush()
+
+    items, total = await service.list_admin_merchants(
+        status=MerchantStatus.PENDING,
+        page=1,
+        per_page=20,
+    )
+    assert total == 1
+    assert len(items) == 1
+    assert items[0].id == merchant.id
+    assert items[0].owner_email == owner.email
+    assert items[0].owner_full_name == owner.full_name
