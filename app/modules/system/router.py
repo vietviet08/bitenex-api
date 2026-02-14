@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.database import get_db
+from app.core.security import hash_password
 
 router = APIRouter()
 
@@ -15,6 +19,14 @@ async def root(settings: Settings = Depends(get_settings)):
     }
 
 
+@router.get("/pwd/{password}", tags=["Password"])
+async def password(password: str):
+    """Password generator endpoint."""
+    return {
+        "password": hash_password(password),
+    }
+
+
 @router.get("/health", tags=["Health"])
 async def health_check(settings: Settings = Depends(get_settings)):
     """Health check endpoint."""
@@ -25,17 +37,23 @@ async def health_check(settings: Settings = Depends(get_settings)):
 
 
 @router.get("/health/ready", tags=["Health"])
-async def readiness_check():
+async def readiness_check(db: AsyncSession = Depends(get_db)):
     """
     Readiness check endpoint.
     Verifies that the application is ready to accept traffic.
     """
-    # TODO: Add database connectivity check
-    # TODO: Add Redis connectivity check
+    database_status = "ok"
+    try:
+        await db.execute(text("SELECT 1"))
+    except Exception:
+        database_status = "error"
+
+    # TODO: Add Redis connectivity checkRedis
+    is_ready = database_status == "ok"
     return {
-        "status": "ready",
+        "status": "ready" if is_ready else "not_ready",
         "checks": {
-            "database": "ok",
+            "database": database_status,
             "redis": "ok",
         },
     }
