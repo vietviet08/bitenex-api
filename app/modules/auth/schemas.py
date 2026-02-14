@@ -22,6 +22,12 @@ class RegisterRequest(BaseDTO):
     phone: str | None = Field(default=None, max_length=20)
 
 
+class MerchantRegisterRequest(RegisterRequest):
+    """Merchant registration request."""
+
+    business_name: str | None = Field(default=None, min_length=2, max_length=100)
+
+
 class RefreshTokenRequest(BaseDTO):
     """Token refresh request."""
 

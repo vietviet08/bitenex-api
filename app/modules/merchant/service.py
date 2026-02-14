@@ -11,6 +11,7 @@ from app.core.events import MerchantApprovedEvent, emit_event
 from app.core.exceptions import AuthorizationError, ConflictError, NotFoundError
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.merchant.schemas import (
+    AdminMerchantResponse,
     MenuItemCreate,
     MenuItemResponse,
     MenuItemUpdate,
@@ -18,6 +19,7 @@ from app.modules.merchant.schemas import (
     MerchantResponse,
     MerchantUpdate,
 )
+from app.modules.user.models import User
 from app.shared.enums import MerchantStatus
 
 
@@ -33,8 +35,45 @@ class MerchantService:
         self.db = db
 
     @staticmethod
-    def _to_merchant_response(merchant: Merchant) -> MerchantResponse:
-        return MerchantResponse.model_validate(merchant)
+    def is_profile_complete(merchant: Merchant) -> bool:
+        """Evaluate merchant profile completeness for onboarding gates."""
+        required_text = [
+            merchant.name,
+            merchant.description,
+            merchant.address,
+            merchant.city,
+            merchant.phone,
+        ]
+        has_required_text = all(
+            value is not None and str(value).strip() for value in required_text
+        )
+        has_coordinates = merchant.latitude is not None and merchant.longitude is not None
+        has_business_settings = (
+            merchant.min_order_amount is not None
+            and merchant.delivery_fee is not None
+            and merchant.estimated_prep_time is not None
+        )
+        return has_required_text and has_coordinates and has_business_settings
+
+    @classmethod
+    def _to_merchant_response(cls, merchant: Merchant) -> MerchantResponse:
+        response = MerchantResponse.model_validate(merchant)
+        response.is_profile_complete = cls.is_profile_complete(merchant)
+        return response
+
+    @classmethod
+    def _to_admin_merchant_response(
+        cls,
+        merchant: Merchant,
+        owner_email: str | None = None,
+        owner_full_name: str | None = None,
+    ) -> AdminMerchantResponse:
+        base = cls._to_merchant_response(merchant)
+        return AdminMerchantResponse(
+            **base.model_dump(),
+            owner_email=owner_email,
+            owner_full_name=owner_full_name,
+        )
 
     @staticmethod
     def _to_menu_item_response(item: MenuItem) -> MenuItemResponse:
@@ -294,6 +333,48 @@ class MerchantService:
             )
 
         return self._to_merchant_response(merchant)
+
+    async def list_admin_merchants(
+        self,
+        *,
+        status: MerchantStatus | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[AdminMerchantResponse], int]:
+        """
+        List merchants for admin management, including owner metadata.
+        """
+        filters = [Merchant.is_deleted == False]
+        if status:
+            filters.append(Merchant.status == status.value)
+
+        query = (
+            select(Merchant, User.email, User.full_name)
+            .select_from(Merchant)
+            .join(
+                User,
+                and_(User.id == Merchant.user_id, User.is_deleted == False),
+                isouter=True,
+            )
+            .where(*filters)
+            .order_by(Merchant.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        rows = (await self.db.execute(query)).all()
+
+        count_query = select(func.count(Merchant.id)).where(*filters)
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        items = [
+            self._to_admin_merchant_response(
+                merchant=row[0],
+                owner_email=row[1],
+                owner_full_name=row[2],
+            )
+            for row in rows
+        ]
+        return items, total
 
     # Menu management
     async def add_menu_item(

@@ -35,7 +35,12 @@ class MerchantUpdate(BaseDTO):
     name: str | None = None
     description: str | None = None
     address: str | None = None
+    city: str | None = None
     phone: str | None = None
+    logo_url: str | None = None
+    cover_image_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     min_order_amount: float | None = None
     delivery_fee: float | None = None
     estimated_prep_time: int | None = None
@@ -55,12 +60,27 @@ class MerchantResponse(MerchantBase, TimestampMixin):
     longitude: float | None = None
     average_rating: float
     total_orders: int
+    is_profile_complete: bool = False
 
 
 class MerchantListResponse(BaseDTO):
     """Paginated merchant list."""
 
     items: list[MerchantResponse]
+    total: int
+
+
+class AdminMerchantResponse(MerchantResponse):
+    """Merchant response enriched for admin management."""
+
+    owner_email: str | None = None
+    owner_full_name: str | None = None
+
+
+class AdminMerchantListResponse(BaseDTO):
+    """Paginated merchant list for admins."""
+
+    items: list[AdminMerchantResponse]
     total: int
 
 

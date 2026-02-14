@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.core.security import (
     create_access_token,
@@ -8,8 +9,9 @@ from app.core.security import (
     hash_password,
     hash_refresh_token,
 )
+from app.modules.merchant.models import Merchant
 from app.modules.user.models import User
-from app.shared.enums import Role
+from app.shared.enums import MerchantStatus, Role
 
 
 @pytest.fixture
@@ -101,7 +103,7 @@ class TestRegistration:
 
         assert response.status_code == 409
         data = response.json()
-        assert data["error_code"] == "DUPLICATE"
+        assert data["error"]["error_code"] == "DUPLICATE"
 
     async def test_register_weak_password(self, client: AsyncClient):
         """Test registration with short password fails."""
@@ -114,7 +116,33 @@ class TestRegistration:
             },
         )
 
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400  # Validation error
+
+    async def test_register_merchant_success(self, client: AsyncClient, db_session):
+        """Test successful merchant registration contract."""
+        response = await client.post(
+            "/api/v1/auth/register/merchant",
+            json={
+                "email": "merchant.new@example.com",
+                "password": "securepassword123",
+                "full_name": "Merchant Owner",
+                "business_name": "Merchant Bistro",
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["user"]["email"] == "merchant.new@example.com"
+        assert data["user"]["role"] == "MERCHANT"
+        assert data["user"]["is_verified"] is True
+        assert "Merchant registration successful" in data["message"]
+
+        merchant_result = await db_session.execute(
+            select(Merchant).where(Merchant.user_id == data["user"]["id"])
+        )
+        merchant = merchant_result.scalar_one_or_none()
+        assert merchant is not None
+        assert merchant.status == MerchantStatus.PENDING.value
 
 
 class TestLogin:

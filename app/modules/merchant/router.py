@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin, RequireMerchant
 from app.modules.merchant.schemas import (
+    AdminMerchantListResponse,
     MenuItemCreate,
     MenuItemResponse,
     MenuItemUpdate,
@@ -17,6 +18,7 @@ from app.modules.merchant.schemas import (
 )
 from app.modules.merchant.service import MerchantService
 from app.shared.dto import MessageResponse
+from app.shared.enums import MerchantStatus
 
 router = APIRouter(
     prefix="/merchants",
@@ -198,6 +200,27 @@ async def delete_menu_item(
 # =============================================================================
 # Admin Endpoints
 # =============================================================================
+@router.get(
+    "/admin/list",
+    response_model=AdminMerchantListResponse,
+    summary="Admin list merchants",
+    dependencies=[RequireAdmin],
+)
+async def admin_list_merchants(
+    status_filter: MerchantStatus | None = Query(default=None, alias="status"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    service: MerchantService = Depends(get_merchant_service),
+) -> AdminMerchantListResponse:
+    """List merchants for admin management, including pending merchants."""
+    items, total = await service.list_admin_merchants(
+        status=status_filter,
+        page=page,
+        per_page=per_page,
+    )
+    return AdminMerchantListResponse(items=items, total=total)
+
+
 @router.post(
     "/{merchant_id}/approve",
     response_model=MerchantResponse,

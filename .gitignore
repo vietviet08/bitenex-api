@@ -60,5 +60,6 @@ logs/
 openspec/
 
 .github/prompts/
+.github/skills/
 
 AGENTS.md

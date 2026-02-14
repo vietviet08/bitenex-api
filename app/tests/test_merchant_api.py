@@ -3,6 +3,7 @@ from httpx import AsyncClient
 
 from app.core.security import create_access_token
 from app.modules.merchant.models import Merchant
+from app.modules.user.models import User
 from app.shared.enums import MerchantStatus, Role
 
 
@@ -137,3 +138,100 @@ async def test_admin_can_approve_merchant(client: AsyncClient, db_session):
     data = response.json()
     assert data["id"] == merchant.id
     assert data["status"] == MerchantStatus.ACTIVE.value
+
+
+@pytest.mark.asyncio
+async def test_admin_list_pending_merchants_with_owner_metadata(
+    client: AsyncClient, db_session
+):
+    owner = User(
+        email="pending.owner@example.com",
+        password_hash="hash",
+        full_name="Pending Owner",
+        role=Role.MERCHANT.value,
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(owner)
+    await db_session.flush()
+
+    pending = Merchant(
+        user_id=owner.id,
+        name="Pending List Merchant",
+        slug="pending-list-merchant",
+        address="9 Pending St",
+        city="Can Tho",
+        status=MerchantStatus.PENDING.value,
+    )
+    db_session.add(pending)
+    await db_session.flush()
+
+    response = await client.get(
+        "/api/v1/merchants/admin/list?status=PENDING",
+        headers=_auth_header("admin-user", Role.ADMIN),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["id"] == pending.id
+    assert payload["items"][0]["owner_email"] == owner.email
+    assert payload["items"][0]["owner_full_name"] == owner.full_name
+
+
+@pytest.mark.asyncio
+async def test_merchant_onboarding_end_to_end_flow(client: AsyncClient):
+    register_response = await client.post(
+        "/api/v1/auth/register/merchant",
+        json={
+            "email": "flow.merchant@example.com",
+            "password": "SecurePass123",
+            "full_name": "Flow Merchant",
+            "business_name": "Flow Bistro",
+            "phone": "+84901234567",
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "flow.merchant@example.com", "password": "SecurePass123"},
+    )
+    assert login_response.status_code == 200
+    merchant_access_token = login_response.json()["tokens"]["access_token"]
+
+    pending_profile_response = await client.get(
+        "/api/v1/merchants/owner/profile",
+        headers={"Authorization": f"Bearer {merchant_access_token}"},
+    )
+    assert pending_profile_response.status_code == 200
+    pending_profile = pending_profile_response.json()
+    assert pending_profile["status"] == MerchantStatus.PENDING.value
+    assert pending_profile["is_profile_complete"] is False
+
+    approve_response = await client.post(
+        f"/api/v1/merchants/{pending_profile['id']}/approve",
+        headers=_auth_header("admin-user", Role.ADMIN),
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == MerchantStatus.ACTIVE.value
+
+    setup_response = await client.patch(
+        "/api/v1/merchants/owner/profile",
+        json={
+            "name": "Flow Bistro Updated",
+            "description": "Profile completed",
+            "address": "100 Flow St",
+            "city": "Ho Chi Minh",
+            "phone": "+84901234567",
+            "latitude": 10.7626,
+            "longitude": 106.6602,
+            "min_order_amount": 0,
+            "delivery_fee": 1.5,
+            "estimated_prep_time": 25,
+        },
+        headers={"Authorization": f"Bearer {merchant_access_token}"},
+    )
+    assert setup_response.status_code == 200
+    setup_payload = setup_response.json()
+    assert setup_payload["status"] == MerchantStatus.ACTIVE.value
+    assert setup_payload["is_profile_complete"] is True

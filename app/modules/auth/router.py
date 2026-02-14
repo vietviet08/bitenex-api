@@ -9,6 +9,7 @@ from app.modules.auth.schemas import (
     ConfirmResetPasswordRequest,
     LoginRequest,
     LoginResponse,
+    MerchantRegisterRequest,
     RefreshTokenRequest,
     RegisterRequest,
     RegisterResponse,
@@ -67,6 +68,23 @@ async def register(
     Register a new user account.
     """
     return await service.register(request)
+
+
+@router.post(
+    "/register/merchant",
+    response_model=RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Merchant registration",
+    description="Register a new merchant owner account and create a pending merchant profile.",
+)
+async def register_merchant(
+    request: MerchantRegisterRequest,
+    service: AuthService = Depends(get_auth_service),
+) -> RegisterResponse:
+    """
+    Register a merchant owner account.
+    """
+    return await service.register_merchant(request)
 
 
 @router.post(
