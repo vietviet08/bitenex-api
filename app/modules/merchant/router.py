@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, RequireAdmin, require_role
+from app.core.dependencies import CurrentUser, RequireAdmin, RequireMerchant
 from app.modules.merchant.schemas import (
     MenuItemCreate,
     MenuItemResponse,
@@ -17,7 +17,6 @@ from app.modules.merchant.schemas import (
 )
 from app.modules.merchant.service import MerchantService
 from app.shared.dto import MessageResponse
-from app.shared.enums import Role
 
 router = APIRouter(
     prefix="/merchants",
@@ -109,10 +108,10 @@ async def get_menu(
 # Merchant Owner Endpoints
 # =============================================================================
 @router.get(
-    "/me/profile",
+    "/owner/profile",
     response_model=MerchantResponse,
     summary="Get my merchant profile",
-    dependencies=[Depends(require_role(Role.MERCHANT))],
+    dependencies=[RequireMerchant],
 )
 async def get_my_merchant(
     user: CurrentUser,
@@ -123,10 +122,10 @@ async def get_my_merchant(
 
 
 @router.patch(
-    "/me/profile",
+    "/owner/profile",
     response_model=MerchantResponse,
     summary="Update my merchant profile",
-    dependencies=[Depends(require_role(Role.MERCHANT))],
+    dependencies=[RequireMerchant],
 )
 async def update_my_merchant(
     data: MerchantUpdate,
@@ -139,11 +138,11 @@ async def update_my_merchant(
 
 
 @router.post(
-    "/me/menu",
+    "/owner/menu",
     response_model=MenuItemResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add menu item",
-    dependencies=[Depends(require_role(Role.MERCHANT))],
+    dependencies=[RequireMerchant],
 )
 async def add_menu_item(
     data: MenuItemCreate,
@@ -156,10 +155,10 @@ async def add_menu_item(
 
 
 @router.patch(
-    "/me/menu/{item_id}",
+    "/owner/menu/{item_id}",
     response_model=MenuItemResponse,
     summary="Update menu item",
-    dependencies=[Depends(require_role(Role.MERCHANT))],
+    dependencies=[RequireMerchant],
 )
 async def update_menu_item(
     item_id: str,
@@ -172,10 +171,10 @@ async def update_menu_item(
 
 
 @router.delete(
-    "/me/menu/{item_id}",
+    "/owner/menu/{item_id}",
     response_model=MessageResponse,
     summary="Delete menu item",
-    dependencies=[Depends(require_role(Role.MERCHANT))],
+    dependencies=[RequireMerchant],
 )
 async def delete_menu_item(
     item_id: str,

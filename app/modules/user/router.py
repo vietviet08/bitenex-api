@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, RequireAdmin
+from app.core.dependencies import CurrentUser, RequireAdmin, RequireUser
 from app.modules.user.schemas import (
     AddressCreate,
     AddressResponse,
@@ -19,6 +19,7 @@ from app.shared.dto import MessageResponse
 router = APIRouter(
     prefix="/users",
     tags=["Users"],
+    dependencies=[RequireUser],
 )
 
 
@@ -27,7 +28,7 @@ async def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
 
 
 @router.get(
-    "/me",
+    "/profile",
     response_model=UserResponse,
     summary="Get current user profile",
 )
@@ -40,7 +41,7 @@ async def get_me(
 
 
 @router.patch(
-    "/me",
+    "/profile",
     response_model=UserResponse,
     summary="Update current user profile",
 )
@@ -69,7 +70,7 @@ async def get_user(
 
 # Address endpoints
 @router.get(
-    "/me/addresses",
+    "/profile/addresses",
     response_model=list[AddressResponse],
     summary="Get my addresses",
 )
@@ -82,7 +83,7 @@ async def get_my_addresses(
 
 
 @router.post(
-    "/me/addresses",
+    "/profile/addresses",
     response_model=AddressResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add address",
@@ -97,7 +98,7 @@ async def add_address(
 
 
 @router.delete(
-    "/me/addresses/{address_id}",
+    "/profile/addresses/{address_id}",
     response_model=MessageResponse,
     summary="Delete address",
 )

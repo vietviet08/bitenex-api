@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, RequireAdmin, require_role
+from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
 from app.modules.driver.schemas import (
     DriverCreate,
     DriverLocationUpdate,
@@ -17,11 +17,11 @@ from app.modules.driver.schemas import (
 )
 from app.modules.driver.service import DriverService
 from app.shared.dto import MessageResponse
-from app.shared.enums import Role
 
 router = APIRouter(
     prefix="/drivers",
     tags=["Drivers"],
+    dependencies=[RequireDriver],
 )
 
 
@@ -30,10 +30,9 @@ async def get_driver_service(db: AsyncSession = Depends(get_db)) -> DriverServic
 
 
 @router.get(
-    "/me",
+    "/profile",
     response_model=DriverResponse,
     summary="Get my driver profile",
-    dependencies=[Depends(require_role(Role.DRIVER))],
 )
 async def get_my_driver_profile(
     user: CurrentUser,
@@ -44,10 +43,9 @@ async def get_my_driver_profile(
 
 
 @router.patch(
-    "/me",
+    "/profile",
     response_model=DriverResponse,
     summary="Update my driver profile",
-    dependencies=[Depends(require_role(Role.DRIVER))],
 )
 async def update_my_driver_profile(
     data: DriverUpdate,
@@ -60,10 +58,9 @@ async def update_my_driver_profile(
 
 
 @router.post(
-    "/me/location",
+    "/profile/location",
     response_model=MessageResponse,
     summary="Update location",
-    dependencies=[Depends(require_role(Role.DRIVER))],
 )
 async def update_location(
     data: DriverLocationUpdate,
@@ -77,10 +74,9 @@ async def update_location(
 
 
 @router.post(
-    "/me/status",
+    "/profile/status",
     response_model=DriverResponse,
     summary="Update status",
-    dependencies=[Depends(require_role(Role.DRIVER))],
 )
 async def update_status(
     data: DriverStatusUpdate,

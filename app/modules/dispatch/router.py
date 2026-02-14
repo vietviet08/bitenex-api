@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, RequireAdmin, require_role
+from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
 from app.modules.dispatch.schemas import (
     AssignmentAction,
     DispatchRequest,
@@ -15,11 +15,11 @@ from app.modules.dispatch.schemas import (
 )
 from app.modules.dispatch.service import DispatchService
 from app.shared.dto import MessageResponse
-from app.shared.enums import Role
 
 router = APIRouter(
     prefix="/dispatch",
     tags=["Dispatch"],
+    dependencies=[RequireDriver],
 )
 
 
@@ -85,7 +85,6 @@ async def reassign_order(
     "/assignments",
     response_model=list[DriverAssignmentResponse],
     summary="Get pending assignments",
-    dependencies=[Depends(require_role(Role.DRIVER))],
 )
 async def get_pending_assignments(
     user: CurrentUser,
@@ -100,7 +99,6 @@ async def get_pending_assignments(
     "/assignments/{assignment_id}/respond",
     response_model=DispatchResponse,
     summary="Respond to assignment",
-    dependencies=[Depends(require_role(Role.DRIVER))],
 )
 async def respond_to_assignment(
     assignment_id: str,
