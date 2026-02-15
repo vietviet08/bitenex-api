@@ -1,7 +1,7 @@
 import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -24,7 +24,7 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password string
     """
-    return pwd_context.hash(password)
+    return cast(str, pwd_context.hash(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -38,7 +38,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return cast(bool, pwd_context.verify(plain_password, hashed_password))
 
 
 def hash_refresh_token(token: str) -> str:
@@ -105,10 +105,13 @@ def create_access_token(
     if additional_claims:
         payload.update(additional_claims)
 
-    return jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
+    return cast(
+        str,
+        jwt.encode(
+            payload,
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        ),
     )
 
 
@@ -135,10 +138,13 @@ def create_refresh_token(user_id: str, role: str) -> str:
         "exp": expire,
     }
 
-    return jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
+    return cast(
+        str,
+        jwt.encode(
+            payload,
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        ),
     )
 
 
@@ -180,7 +186,7 @@ def decode_token(token: str) -> dict[str, Any]:
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-        return payload
+        return cast(dict[str, Any], payload)
     except jwt.ExpiredSignatureError:
         raise TokenExpiredError("Token has expired")
     except JWTError as e:
@@ -249,10 +255,13 @@ def create_verification_token(user_id: str) -> str:
         "exp": expire,
     }
 
-    return jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
+    return cast(
+        str,
+        jwt.encode(
+            payload,
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        ),
     )
 
 
@@ -297,10 +306,13 @@ def create_password_reset_token(user_id: str) -> str:
         "exp": expire,
     }
 
-    return jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
+    return cast(
+        str,
+        jwt.encode(
+            payload,
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        ),
     )
 
 

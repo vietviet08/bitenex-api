@@ -14,7 +14,6 @@ from app.modules.dispatch.schemas import (
     DriverAssignmentResponse,
 )
 from app.modules.dispatch.service import DispatchService
-from app.shared.dto import MessageResponse
 
 router = APIRouter(
     prefix="/dispatch",

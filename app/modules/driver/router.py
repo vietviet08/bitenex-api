@@ -2,13 +2,13 @@
 # Driver Module - API Router
 # =============================================================================
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
+from app.core.exceptions import NotFoundError
 from app.modules.driver.schemas import (
-    DriverCreate,
     DriverLocationUpdate,
     DriverResponse,
     DriverStatusUpdate,
@@ -39,7 +39,10 @@ async def get_my_driver_profile(
     service: DriverService = Depends(get_driver_service),
 ) -> DriverResponse:
     """Get current driver's profile."""
-    return await service.get_driver_by_user_id(user.user_id)
+    driver = await service.get_driver_by_user_id(user.user_id)
+    if driver is None:
+        raise NotFoundError("Driver", user.user_id)
+    return driver
 
 
 @router.patch(
@@ -54,6 +57,8 @@ async def update_my_driver_profile(
 ) -> DriverResponse:
     """Update current driver's profile."""
     driver = await service.get_driver_by_user_id(user.user_id)
+    if driver is None:
+        raise NotFoundError("Driver", user.user_id)
     return await service.update_driver(driver.id, data)
 
 
@@ -69,6 +74,8 @@ async def update_location(
 ) -> MessageResponse:
     """Update driver's current location."""
     driver = await service.get_driver_by_user_id(user.user_id)
+    if driver is None:
+        raise NotFoundError("Driver", user.user_id)
     await service.update_location(driver.id, data)
     return MessageResponse(message="Location updated")
 
@@ -85,6 +92,8 @@ async def update_status(
 ) -> DriverResponse:
     """Update driver's availability status (online/offline)."""
     driver = await service.get_driver_by_user_id(user.user_id)
+    if driver is None:
+        raise NotFoundError("Driver", user.user_id)
     return await service.update_status(driver.id, data)
 
 
@@ -115,7 +124,10 @@ async def get_driver(
     service: DriverService = Depends(get_driver_service),
 ) -> DriverResponse:
     """Get driver by ID. Admin only."""
-    return await service.get_driver_by_id(driver_id)
+    driver = await service.get_driver_by_id(driver_id)
+    if driver is None:
+        raise NotFoundError("Driver", driver_id)
+    return driver
 
 
 @router.post(

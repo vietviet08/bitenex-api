@@ -2,6 +2,8 @@
 # Admin Module - Service Layer
 # =============================================================================
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.admin.schemas import (
@@ -69,8 +71,8 @@ class AdminService:
         resource_type: str,
         resource_id: str | None,
         description: str,
-        before_data: dict | None = None,
-        after_data: dict | None = None,
+        before_data: dict[str, Any] | None = None,
+        after_data: dict[str, Any] | None = None,
         ip_address: str | None = None,
     ) -> None:
         """Log an admin action."""

@@ -1,10 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Awaitable, Callable
 
 import colorama
 import pyfiglet
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -84,7 +84,10 @@ app.add_middleware(
 
 # Request logging middleware
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_requests(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     """Log incoming requests."""
     logger.debug(f"{request.method} {request.url.path}")
     response = await call_next(request)

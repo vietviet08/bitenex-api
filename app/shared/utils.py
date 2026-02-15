@@ -133,7 +133,7 @@ def remove_none_values(d: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
 
 
-def deep_merge(base: dict, override: dict) -> dict:
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """
     Deep merge two dictionaries.
     Override values take precedence.
