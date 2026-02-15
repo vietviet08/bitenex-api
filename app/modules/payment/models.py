@@ -6,7 +6,7 @@ from sqlalchemy import Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel
-from app.shared.enums import PaymentMethod, PaymentStatus
+from app.shared.enums import PaymentStatus
 
 
 class Payment(BaseModel):

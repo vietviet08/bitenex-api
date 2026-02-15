@@ -2,7 +2,7 @@
 # Payment Module - Pydantic Schemas
 # =============================================================================
 
-from datetime import datetime
+from typing import Any
 
 from app.shared.dto import BaseDTO, TimestampMixin
 from app.shared.enums import PaymentMethod, PaymentStatus
@@ -77,4 +77,4 @@ class PaymentWebhookPayload(BaseDTO):
     event_type: str
     transaction_id: str
     status: str
-    raw_payload: dict
+    raw_payload: dict[str, Any]

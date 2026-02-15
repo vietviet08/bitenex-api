@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_role
+from app.core.exceptions import NotFoundError
 from app.modules.order.schemas import (
     OrderCreate,
     OrderListResponse,
@@ -14,7 +15,6 @@ from app.modules.order.schemas import (
     OrderStatusUpdate,
 )
 from app.modules.order.service import OrderService
-from app.shared.dto import MessageResponse
 from app.shared.enums import OrderStatus, Role
 
 router = APIRouter(
@@ -75,7 +75,10 @@ async def get_order(
     service: OrderService = Depends(get_order_service),
 ) -> OrderResponse:
     """Get order by ID."""
-    return await service.get_order_by_id(order_id)
+    order = await service.get_order_by_id(order_id)
+    if order is None:
+        raise NotFoundError("Order", order_id)
+    return order
 
 
 @router.post(

@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.get("/", tags=["Root"])
-async def root(settings: Settings = Depends(get_settings)):
+async def root(settings: Settings = Depends(get_settings)) -> dict[str, str]:
     """Root endpoint."""
     return {
         "name": settings.app_name,
@@ -20,7 +20,7 @@ async def root(settings: Settings = Depends(get_settings)):
 
 
 @router.get("/pwd/{password}", tags=["Password"])
-async def password(password: str):
+async def password(password: str) -> dict[str, str]:
     """Password generator endpoint."""
     return {
         "password": hash_password(password),
@@ -28,7 +28,7 @@ async def password(password: str):
 
 
 @router.get("/health", tags=["Health"])
-async def health_check(settings: Settings = Depends(get_settings)):
+async def health_check(settings: Settings = Depends(get_settings)) -> dict[str, str]:
     """Health check endpoint."""
     return {
         "status": "healthy",
@@ -37,7 +37,9 @@ async def health_check(settings: Settings = Depends(get_settings)):
 
 
 @router.get("/health/ready", tags=["Health"])
-async def readiness_check(db: AsyncSession = Depends(get_db)):
+async def readiness_check(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str | dict[str, str]]:
     """
     Readiness check endpoint.
     Verifies that the application is ready to accept traffic.
@@ -60,7 +62,7 @@ async def readiness_check(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/health/live", tags=["Health"])
-async def liveness_check():
+async def liveness_check() -> dict[str, str]:
     """
     Liveness check endpoint.
     Indicates that the application is running.

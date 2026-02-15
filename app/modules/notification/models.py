@@ -6,7 +6,6 @@ from sqlalchemy import Boolean, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel
-from app.shared.enums import NotificationChannel, NotificationType
 
 
 class Notification(BaseModel):

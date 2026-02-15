@@ -12,7 +12,7 @@ class BaseWorker(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     @abstractmethod
     async def process(self, data: dict[str, Any]) -> None:

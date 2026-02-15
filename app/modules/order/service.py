@@ -2,18 +2,15 @@
 # Order Module - Service Layer
 # =============================================================================
 
-import json
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError, ValidationError
-from app.modules.merchant.models import MenuItem, MenuItemOption, MenuItemOptionGroup
-from app.modules.order.models import Order, OrderItem, OrderStatusHistory
+from app.core.exceptions import ValidationError
+from app.modules.merchant.models import MenuItemOption, MenuItemOptionGroup
 from app.modules.order.schemas import (
     OrderCreate,
-    OrderItemResponse,
-    OrderListResponse,
     OrderResponse,
     OrderStatusUpdate,
     SelectedOptionInput,
@@ -34,7 +31,7 @@ class OrderService:
         self,
         menu_item_id: str,
         selected_options: list[SelectedOptionInput],
-    ) -> tuple[list[dict], float]:
+    ) -> tuple[list[dict[str, Any]], float]:
         """
         Validate selected options belong to the menu item and snapshot their details.
 
@@ -44,7 +41,7 @@ class OrderService:
         if not selected_options:
             return [], 0.0
 
-        snapshot: list[dict] = []
+        snapshot: list[dict[str, Any]] = []
         total_delta = 0.0
 
         for sel in selected_options:
@@ -53,7 +50,7 @@ class OrderService:
                 select(MenuItemOptionGroup).where(
                     MenuItemOptionGroup.id == sel.option_group_id,
                     MenuItemOptionGroup.menu_item_id == menu_item_id,
-                    MenuItemOptionGroup.is_deleted == False,
+                    MenuItemOptionGroup.is_deleted.is_(False),
                 )
             )
             group = group_result.scalar_one_or_none()
@@ -67,7 +64,7 @@ class OrderService:
                 select(MenuItemOption).where(
                     MenuItemOption.id == sel.option_id,
                     MenuItemOption.option_group_id == sel.option_group_id,
-                    MenuItemOption.is_deleted == False,
+                    MenuItemOption.is_deleted.is_(False),
                 )
             )
             option = option_result.scalar_one_or_none()
@@ -205,7 +202,7 @@ class OrderService:
     ) -> bool:
         """Validate if status transition is allowed."""
         # Define allowed transitions
-        allowed_transitions = {
+        allowed_transitions: dict[OrderStatus, list[OrderStatus]] = {
             OrderStatus.PENDING: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
             OrderStatus.CONFIRMED: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
             OrderStatus.PREPARING: [OrderStatus.READY, OrderStatus.CANCELLED],
@@ -218,3 +215,4 @@ class OrderService:
         }
 
         return new in allowed_transitions.get(current, [])
+

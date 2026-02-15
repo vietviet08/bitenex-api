@@ -2,10 +2,7 @@
 # Admin Module - Pydantic Schemas
 # =============================================================================
 
-from datetime import datetime
-from typing import Any
 
-from pydantic import Field
 
 from app.shared.dto import BaseDTO, TimestampMixin
 

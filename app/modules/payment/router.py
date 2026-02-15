@@ -2,11 +2,14 @@
 # Payment Module - API Router
 # =============================================================================
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin
+from app.core.exceptions import NotFoundError
 from app.modules.payment.schemas import (
     AddPaymentMethodRequest,
     PaymentCreate,
@@ -59,7 +62,10 @@ async def get_payment(
     service: PaymentService = Depends(get_payment_service),
 ) -> PaymentResponse:
     """Get payment by ID."""
-    return await service.get_payment(payment_id)
+    payment = await service.get_payment(payment_id)
+    if payment is None:
+        raise NotFoundError("Payment", payment_id)
+    return payment
 
 
 @router.get(
@@ -169,8 +175,8 @@ async def payment_webhook(
     gateway: str,
     request: Request,
     service: PaymentService = Depends(get_payment_service),
-) -> dict:
+) -> dict[str, str]:
     """Handle payment gateway webhooks."""
-    payload = await request.json()
+    payload = cast(dict[str, Any], await request.json())
     await service.handle_webhook(gateway, payload)
     return {"status": "received"}

@@ -2,7 +2,6 @@
 # User Module - Pydantic Schemas
 # =============================================================================
 
-from datetime import datetime
 
 from pydantic import EmailStr, Field
 
