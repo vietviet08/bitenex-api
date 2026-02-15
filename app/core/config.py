@@ -1,7 +1,7 @@
 from functools import lru_cache
-from typing import List
+from typing import List, cast
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,7 +49,8 @@ class Settings(BaseSettings):
             import json
 
             try:
-                return json.loads(v)
+                parsed = json.loads(v)
+                return cast(List[str], parsed)
             except json.JSONDecodeError:
                 # Handle comma-separated string
                 return [origin.strip() for origin in v.split(",")]

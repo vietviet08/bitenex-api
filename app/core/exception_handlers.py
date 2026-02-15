@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -25,7 +26,7 @@ def register_exception_handlers(
         """Handle Pydantic validation errors and convert to custom ValidationError."""
         # Extract validation errors from Pydantic format
         errors = exc.errors()
-        error_details = {}
+        error_details: dict[str, list[dict[str, Any]]] = {}
 
         # Convert Pydantic errors to a more readable format
         for error in errors:

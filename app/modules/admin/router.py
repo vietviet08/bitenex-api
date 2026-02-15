@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin
+from app.core.exceptions import NotFoundError
 from app.modules.admin.schemas import (
     AuditLogListResponse,
     DashboardStats,
@@ -146,7 +147,10 @@ async def get_config(
     service: AdminService = Depends(get_admin_service),
 ) -> SystemConfigResponse:
     """Get a specific configuration value."""
-    return await service.get_config(key)
+    config = await service.get_config(key)
+    if config is None:
+        raise NotFoundError("Config", key)
+    return config
 
 
 @router.put(

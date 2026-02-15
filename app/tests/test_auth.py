@@ -7,7 +7,6 @@ from app.core.security import (
     create_password_reset_token,
     create_verification_token,
     hash_password,
-    hash_refresh_token,
 )
 from app.modules.merchant.models import Merchant
 from app.modules.user.models import User

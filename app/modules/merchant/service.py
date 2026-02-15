@@ -120,7 +120,7 @@ class MerchantService:
     ) -> Merchant:
         filters = [
             Merchant.id == merchant_id,
-            Merchant.is_deleted == False,
+            Merchant.is_deleted.is_(False),
         ]
         if active_only:
             filters.append(Merchant.status == MerchantStatus.ACTIVE.value)
@@ -139,7 +139,7 @@ class MerchantService:
     ) -> Merchant:
         filters = [
             Merchant.slug == slug,
-            Merchant.is_deleted == False,
+            Merchant.is_deleted.is_(False),
         ]
         if active_only:
             filters.append(Merchant.status == MerchantStatus.ACTIVE.value)
@@ -154,7 +154,7 @@ class MerchantService:
         result = await self.db.execute(
             select(Merchant).where(
                 Merchant.user_id == user_id,
-                Merchant.is_deleted == False,
+                Merchant.is_deleted.is_(False),
             )
         )
         merchant = result.scalar_one_or_none()
@@ -170,7 +170,7 @@ class MerchantService:
     ) -> MenuItem:
         filters = [MenuItem.id == item_id]
         if not include_deleted:
-            filters.append(MenuItem.is_deleted == False)
+            filters.append(MenuItem.is_deleted.is_(False))
 
         result = await self.db.execute(select(MenuItem).where(*filters))
         item = result.scalar_one_or_none()
@@ -189,7 +189,7 @@ class MerchantService:
             result = await self.db.execute(
                 select(Merchant.id).where(
                     Merchant.slug == candidate,
-                    Merchant.is_deleted == False,
+                    Merchant.is_deleted.is_(False),
                 )
             )
             exists = result.scalar_one_or_none()
@@ -218,7 +218,7 @@ class MerchantService:
         result = await self.db.execute(
             select(Merchant).where(
                 Merchant.user_id == data.user_id,
-                Merchant.is_deleted == False,
+                Merchant.is_deleted.is_(False),
             )
         )
         existing = result.scalar_one_or_none()
@@ -302,7 +302,7 @@ class MerchantService:
     ) -> tuple[list[MerchantResponse], int]:
         """List merchants with filters and pagination."""
         filters = [
-            Merchant.is_deleted == False,
+            Merchant.is_deleted.is_(False),
             Merchant.status == MerchantStatus.ACTIVE.value,
         ]
 
@@ -316,7 +316,7 @@ class MerchantService:
             category_filter = MenuItem.category.ilike(f"%{category.strip()}%")
             join_condition = and_(
                 MenuItem.merchant_id == Merchant.id,
-                MenuItem.is_deleted == False,
+                MenuItem.is_deleted.is_(False),
             )
             merchant_query = (
                 merchant_query.join(MenuItem, join_condition)
@@ -358,7 +358,7 @@ class MerchantService:
         result = await self.db.execute(
             select(Merchant)
             .where(
-                Merchant.is_deleted == False,
+                Merchant.is_deleted.is_(False),
                 Merchant.status == MerchantStatus.ACTIVE.value,
                 Merchant.name.ilike(f"%{term}%"),
             )
@@ -407,26 +407,32 @@ class MerchantService:
         """
         List merchants for admin management, including owner metadata.
         """
-        filters = [Merchant.is_deleted == False]
-        if status:
-            filters.append(Merchant.status == status.value)
-
         query = (
             select(Merchant, User.email, User.full_name)
             .select_from(Merchant)
             .join(
                 User,
-                and_(User.id == Merchant.user_id, User.is_deleted == False),
+                and_(User.id == Merchant.user_id, User.is_deleted.is_(False)),
                 isouter=True,
             )
-            .where(*filters)
-            .order_by(Merchant.created_at.desc())
+            .where(Merchant.is_deleted.is_(False))
+        )
+        count_query = select(func.count(Merchant.id)).where(
+            Merchant.is_deleted.is_(False)
+        )
+
+        if status:
+            status_filter = Merchant.status == status.value
+            query = query.where(status_filter)
+            count_query = count_query.where(status_filter)
+
+        query = (
+            query.order_by(Merchant.created_at.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
         rows = (await self.db.execute(query)).all()
 
-        count_query = select(func.count(Merchant.id)).where(*filters)
         total = (await self.db.execute(count_query)).scalar_one()
 
         items = [
@@ -455,7 +461,7 @@ class MerchantService:
 
         filters = [
             MenuItem.merchant_id == merchant_id,
-            MenuItem.is_deleted == False,
+            MenuItem.is_deleted.is_(False),
         ]
         if category:
             filters.append(MenuItem.category.ilike(f"%{category.strip()}%"))
@@ -509,7 +515,7 @@ class MerchantService:
             await self.db.execute(
                 select(User.email, User.full_name).where(
                     User.id == merchant.user_id,
-                    User.is_deleted == False,
+                    User.is_deleted.is_(False),
                 )
             )
         ).one_or_none()
@@ -645,7 +651,7 @@ class MerchantService:
             select(MenuItemOptionGroup)
             .where(
                 MenuItemOptionGroup.menu_item_id == menu_item_id,
-                MenuItemOptionGroup.is_deleted == False,
+                MenuItemOptionGroup.is_deleted.is_(False),
             )
             .order_by(MenuItemOptionGroup.sort_order)
         )
@@ -657,7 +663,7 @@ class MerchantService:
                 select(MenuItemOption)
                 .where(
                     MenuItemOption.option_group_id == group.id,
-                    MenuItemOption.is_deleted == False,
+                    MenuItemOption.is_deleted.is_(False),
                 )
                 .order_by(MenuItemOption.sort_order)
             )
@@ -696,7 +702,7 @@ class MerchantService:
         result = await self.db.execute(
             select(MenuItemOptionGroup).where(
                 MenuItemOptionGroup.id == group_id,
-                MenuItemOptionGroup.is_deleted == False,
+                MenuItemOptionGroup.is_deleted.is_(False),
             )
         )
         group = result.scalar_one_or_none()
@@ -712,7 +718,7 @@ class MerchantService:
         result = await self.db.execute(
             select(MenuItemOption).where(
                 MenuItemOption.id == option_id,
-                MenuItemOption.is_deleted == False,
+                MenuItemOption.is_deleted.is_(False),
             )
         )
         option = result.scalar_one_or_none()
@@ -779,7 +785,7 @@ class MerchantService:
             select(MenuItemOption)
             .where(
                 MenuItemOption.option_group_id == group.id,
-                MenuItemOption.is_deleted == False,
+                MenuItemOption.is_deleted.is_(False),
             )
             .order_by(MenuItemOption.sort_order)
         )
@@ -806,7 +812,7 @@ class MerchantService:
         options_result = await self.db.execute(
             select(MenuItemOption).where(
                 MenuItemOption.option_group_id == group_id,
-                MenuItemOption.is_deleted == False,
+                MenuItemOption.is_deleted.is_(False),
             )
         )
         for option in options_result.scalars().all():
@@ -891,3 +897,4 @@ class MerchantService:
 
         option.soft_delete()
         await self.db.flush()
+

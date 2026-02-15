@@ -2,7 +2,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable
 from uuid import uuid4
 
 
@@ -91,7 +91,7 @@ class EventDispatcher:
         await dispatcher.emit(OrderCreatedEvent(order_id="123", ...))
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._handlers: dict[str, list[EventHandler]] = defaultdict(list)
         self._is_processing = False
         self._event_queue: asyncio.Queue[Event] = asyncio.Queue()

@@ -2,7 +2,7 @@
 # User Module - Service Layer
 # =============================================================================
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -30,7 +30,7 @@ class UserService:
         """Get user by ID."""
         result = await self.db.execute(
             select(User).where(
-                User.id == user_id, User.is_deleted == False
+                User.id == user_id, User.is_deleted.is_(False)
             )  # noqa: E712
         )
         user = result.scalar_one_or_none()
@@ -42,7 +42,7 @@ class UserService:
         """Get user by email."""
         result = await self.db.execute(
             select(User).where(
-                User.email == email, User.is_deleted == False
+                User.email == email, User.is_deleted.is_(False)
             )  # noqa: E712
         )
         user = result.scalar_one_or_none()
@@ -68,7 +68,7 @@ class UserService:
         """Update user profile."""
         result = await self.db.execute(
             select(User).where(
-                User.id == user_id, User.is_deleted == False
+                User.id == user_id, User.is_deleted.is_(False)
             )  # noqa: E712
         )
         user = result.scalar_one_or_none()
@@ -87,7 +87,7 @@ class UserService:
         """Soft delete user."""
         result = await self.db.execute(
             select(User).where(
-                User.id == user_id, User.is_deleted == False
+                User.id == user_id, User.is_deleted.is_(False)
             )  # noqa: E712
         )
         user = result.scalar_one_or_none()
@@ -171,7 +171,7 @@ class UserService:
         """Admin update user — can change role, active status, etc."""
         result = await self.db.execute(
             select(User).where(
-                User.id == user_id, User.is_deleted == False
+                User.id == user_id, User.is_deleted.is_(False)
             )  # noqa: E712
         )
         user = result.scalar_one_or_none()
@@ -192,7 +192,7 @@ class UserService:
         """Activate or deactivate a user."""
         result = await self.db.execute(
             select(User).where(
-                User.id == user_id, User.is_deleted == False
+                User.id == user_id, User.is_deleted.is_(False)
             )  # noqa: E712
         )
         user = result.scalar_one_or_none()
@@ -246,3 +246,4 @@ class UserService:
 
         address.soft_delete()
         await self.db.commit()
+

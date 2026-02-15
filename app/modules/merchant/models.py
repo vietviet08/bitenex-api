@@ -2,7 +2,7 @@
 # Merchant Module - ORM Models
 # =============================================================================
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel

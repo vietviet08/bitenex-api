@@ -14,7 +14,7 @@ from app.modules.notification.schemas import (
     NotificationPreferenceUpdate,
     NotificationResponse,
 )
-from app.shared.enums import NotificationChannel, NotificationType
+from app.shared.enums import NotificationType
 
 
 class NotificationService:

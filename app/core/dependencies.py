@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.exceptions import AuthenticationError, InsufficientRoleError

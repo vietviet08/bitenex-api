@@ -8,20 +8,6 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import Base
-from app.modules.admin.models import AdminAuditLog, SystemConfig
-from app.modules.auth.models import RefreshToken, TokenBlacklist
-from app.modules.base import BaseModel
-from app.modules.dispatch.models import DispatchAssignment, DispatchConfig
-from app.modules.driver.models import Driver, DriverLocation
-from app.modules.merchant.models import MenuItem, Merchant, MerchantCategory
-from app.modules.notification.models import (
-    DeviceToken,
-    Notification,
-    NotificationPreference,
-)
-from app.modules.order.models import Order, OrderItem, OrderStatusHistory
-from app.modules.payment.models import Payment, PaymentMethod, Refund
-from app.modules.user.models import User, UserAddress
 
 # from app.core.config import settings
 

@@ -2,6 +2,8 @@
 # Payment Module - Service Layer
 # =============================================================================
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.payment.schemas import (
@@ -80,7 +82,7 @@ class PaymentService:
     async def handle_webhook(
         self,
         gateway: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         """
         Handle payment gateway webhook.

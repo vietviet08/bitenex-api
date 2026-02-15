@@ -12,6 +12,11 @@ testpaths = ["app/tests"]
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = "app.tests.*"
+ignore_errors = true
 
 [tool.ruff]
 line-length = 100

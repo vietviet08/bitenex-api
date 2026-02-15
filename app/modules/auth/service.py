@@ -67,7 +67,7 @@ class AuthService:
         result = await self.db.execute(
             select(User).where(
                 User.email == email.lower(),
-                User.is_deleted == False,
+                User.is_deleted.is_(False),
             )
         )
         return result.scalar_one_or_none()
@@ -77,7 +77,7 @@ class AuthService:
         result = await self.db.execute(
             select(User).where(
                 User.id == user_id,
-                User.is_deleted == False,
+                User.is_deleted.is_(False),
             )
         )
         return result.scalar_one_or_none()
@@ -117,7 +117,7 @@ class AuthService:
             result = await self.db.execute(
                 select(Merchant.id).where(
                     Merchant.slug == candidate,
-                    Merchant.is_deleted == False,
+                    Merchant.is_deleted.is_(False),
                 )
             )
             exists = result.scalar_one_or_none()
@@ -325,7 +325,7 @@ class AuthService:
         result = await self.db.execute(
             select(RefreshToken).where(
                 RefreshToken.token_hash == token_hash,
-                RefreshToken.is_deleted == False,
+                RefreshToken.is_deleted.is_(False),
             )
         )
         stored_token = result.scalar_one_or_none()
@@ -392,7 +392,7 @@ class AuthService:
             select(RefreshToken).where(
                 RefreshToken.token_hash == token_hash,
                 RefreshToken.user_id == user_id,
-                RefreshToken.is_deleted == False,
+                RefreshToken.is_deleted.is_(False),
             )
         )
         stored_token = result.scalar_one_or_none()
@@ -417,8 +417,8 @@ class AuthService:
             update(RefreshToken)
             .where(
                 RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == False,
-                RefreshToken.is_deleted == False,
+                RefreshToken.is_revoked.is_(False),
+                RefreshToken.is_deleted.is_(False),
             )
             .values(
                 is_revoked=True,
@@ -589,3 +589,4 @@ class AuthService:
             raise NotFoundError(message=self._USER_NOT_FOUND_MESSAGE)
 
         return self._build_auth_user_response(user)
+

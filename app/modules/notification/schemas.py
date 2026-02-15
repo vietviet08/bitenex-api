@@ -2,7 +2,6 @@
 # Notification Module - Pydantic Schemas
 # =============================================================================
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import Field
