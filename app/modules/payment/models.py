@@ -2,7 +2,9 @@
 # Payment Module - ORM Models
 # =============================================================================
 
-from sqlalchemy import Float, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel
@@ -42,7 +44,7 @@ class Payment(BaseModel):
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     currency: Mapped[str] = mapped_column(
         String(3),
-        default="USD",
+        default="VND",
         nullable=False,
     )
 
@@ -128,3 +130,38 @@ class PaymentMethod(BaseModel):
     gateway: Mapped[str] = mapped_column(String(50), nullable=False)
 
     is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+
+class WebhookEvent(BaseModel):
+    """
+    Persisted webhook deliveries for deduplication and audit.
+    """
+
+    __tablename__ = "webhook_events"
+    __table_args__ = (UniqueConstraint("gateway", "event_id", name="uq_webhook_gateway_event"),)
+
+    gateway: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    event_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="RECEIVED", nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class IdempotencyKey(BaseModel):
+    """
+    Persistent idempotency records for financial write endpoints.
+    """
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("scope", "key", name="uq_idempotency_scope_key"),)
+
+    key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    response_status: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
+    response_payload: Mapped[str] = mapped_column(Text, nullable=False)

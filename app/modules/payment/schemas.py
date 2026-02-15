@@ -13,8 +13,8 @@ class PaymentCreate(BaseDTO):
 
     order_id: str
     amount: float
-    currency: str = "USD"
-    method: PaymentMethod
+    currency: str = "VND"
+    method: PaymentMethod = PaymentMethod.VNPAY
     payment_method_id: str | None = None  # For saved payment methods
 
 
@@ -30,6 +30,7 @@ class PaymentResponse(BaseDTO, TimestampMixin):
     method: str
     status: PaymentStatus
     gateway: str | None = None
+    payment_url: str | None = None
     error_message: str | None = None
 
 

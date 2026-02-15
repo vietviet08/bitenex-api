@@ -48,6 +48,7 @@ class PaymentMethod(str, Enum):
     Supported payment methods.
     """
 
+    VNPAY = "VNPAY"
     CREDIT_CARD = "CREDIT_CARD"
     DEBIT_CARD = "DEBIT_CARD"
     DIGITAL_WALLET = "DIGITAL_WALLET"

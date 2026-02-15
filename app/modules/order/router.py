@@ -23,7 +23,7 @@ router = APIRouter(
 )
 
 
-async def get_order_service(db: AsyncSession = Depends(get_db)) -> OrderService:
+def get_order_service(db: AsyncSession = Depends(get_db)) -> OrderService:
     return OrderService(db)
 
 
@@ -75,10 +75,11 @@ async def get_order(
     service: OrderService = Depends(get_order_service),
 ) -> OrderResponse:
     """Get order by ID."""
-    order = await service.get_order_by_id(order_id)
-    if order is None:
-        raise NotFoundError("Order", order_id)
-    return order
+    return await service.get_order_by_id(
+        order_id,
+        actor_user_id=user.user_id,
+        actor_role=user.role,
+    )
 
 
 @router.post(
@@ -93,7 +94,12 @@ async def cancel_order(
     service: OrderService = Depends(get_order_service),
 ) -> OrderResponse:
     """Cancel an order."""
-    return await service.cancel_order(order_id, reason, user.user_id)
+    return await service.cancel_order(
+        order_id,
+        reason,
+        user.user_id,
+        actor_role=user.role,
+    )
 
 
 # =============================================================================
@@ -113,8 +119,10 @@ async def get_merchant_orders(
     service: OrderService = Depends(get_order_service),
 ) -> OrderListResponse:
     """Get orders for merchant."""
-    # TODO: Get merchant_id from user
-    items, total = await service.get_merchant_orders("", status_filter, page, per_page)
+    merchant_id = await service.resolve_merchant_id_by_user_id(user.user_id)
+    items, total = await service.get_merchant_orders(
+        merchant_id, status_filter, page, per_page
+    )
     return OrderListResponse(items=items, total=total)
 
 
@@ -131,7 +139,12 @@ async def update_order_status(
     service: OrderService = Depends(get_order_service),
 ) -> OrderResponse:
     """Update order status."""
-    return await service.update_status(order_id, data, user.user_id)
+    return await service.update_status(
+        order_id,
+        data,
+        changed_by=user.user_id,
+        actor_role=user.role,
+    )
 
 
 # =============================================================================
@@ -151,6 +164,8 @@ async def get_driver_orders(
     service: OrderService = Depends(get_order_service),
 ) -> OrderListResponse:
     """Get orders assigned to driver."""
-    # TODO: Get driver_id from user
-    items, total = await service.get_driver_orders("", status_filter, page, per_page)
+    driver_id = await service.resolve_driver_id_by_user_id(user.user_id)
+    items, total = await service.get_driver_orders(
+        driver_id, status_filter, page, per_page
+    )
     return OrderListResponse(items=items, total=total)

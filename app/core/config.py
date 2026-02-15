@@ -40,6 +40,13 @@ class Settings(BaseSettings):
 
     ws_message_queue_size: int = 100
 
+    # VNPAY (sandbox by default)
+    vnp_tmn_code: str
+    vnp_hash_secret: str
+    vnp_url: str
+    vnp_return_url: str
+    vnp_ipn_url: str
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | List[str]) -> List[str]:
