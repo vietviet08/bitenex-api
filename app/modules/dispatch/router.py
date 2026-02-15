@@ -23,7 +23,7 @@ router = APIRouter(
 )
 
 
-async def get_dispatch_service(
+def get_dispatch_service(
     db: AsyncSession = Depends(get_db),
 ) -> DispatchService:
     return DispatchService(db)

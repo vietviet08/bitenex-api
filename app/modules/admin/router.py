@@ -26,7 +26,7 @@ router = APIRouter(
 )
 
 
-async def get_admin_service(
+def get_admin_service(
     db: AsyncSession = Depends(get_db),
 ) -> AdminService:
     return AdminService(db)
