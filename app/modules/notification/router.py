@@ -24,7 +24,7 @@ router = APIRouter(
 )
 
 
-async def get_notification_service(
+def get_notification_service(
     db: AsyncSession = Depends(get_db),
 ) -> NotificationService:
     return NotificationService(db)

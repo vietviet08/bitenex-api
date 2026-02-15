@@ -25,7 +25,7 @@ router = APIRouter(
 )
 
 
-async def get_driver_service(db: AsyncSession = Depends(get_db)) -> DriverService:
+def get_driver_service(db: AsyncSession = Depends(get_db)) -> DriverService:
     return DriverService(db)
 
 

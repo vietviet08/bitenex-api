@@ -35,7 +35,7 @@ router = APIRouter(
 )
 
 
-async def get_merchant_service(
+def get_merchant_service(
     db: AsyncSession = Depends(get_db),
 ) -> MerchantService:
     return MerchantService(db)

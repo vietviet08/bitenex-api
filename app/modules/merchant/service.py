@@ -49,6 +49,8 @@ class MerchantService:
     """
 
     _MERCHANT_NOT_FOUND = "Merchant not found"
+    _OPTION_NOT_FOUND = "Option not found"
+    _OPTION_GROUP_NOT_FOUND = "Option group not found"
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -699,7 +701,7 @@ class MerchantService:
         )
         group = result.scalar_one_or_none()
         if not group:
-            raise NotFoundError(message="Option group not found")
+            raise NotFoundError(message=self._OPTION_GROUP_NOT_FOUND)
         return group
 
     async def _get_option_model(
@@ -715,7 +717,7 @@ class MerchantService:
         )
         option = result.scalar_one_or_none()
         if not option:
-            raise NotFoundError(message="Option not found")
+            raise NotFoundError(message=self._OPTION_NOT_FOUND)
         return option
 
     async def create_option_group(
@@ -763,7 +765,7 @@ class MerchantService:
         group = await self._get_option_group_model(group_id)
 
         if group.menu_item_id != item_id:
-            raise NotFoundError(message="Option group not found")
+            raise NotFoundError(message=self._OPTION_GROUP_NOT_FOUND)
 
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -798,7 +800,7 @@ class MerchantService:
         group = await self._get_option_group_model(group_id)
 
         if group.menu_item_id != item_id:
-            raise NotFoundError(message="Option group not found")
+            raise NotFoundError(message=self._OPTION_GROUP_NOT_FOUND)
 
         # Soft-delete all options in the group
         options_result = await self.db.execute(
@@ -828,7 +830,7 @@ class MerchantService:
         await self._verify_menu_item_ownership(item_id, actor_merchant_id)
         group = await self._get_option_group_model(group_id)
         if group.menu_item_id != item_id:
-            raise NotFoundError(message="Option group not found")
+            raise NotFoundError(message=self._OPTION_GROUP_NOT_FOUND)
 
         option = MenuItemOption(
             option_group_id=group_id,
@@ -855,11 +857,11 @@ class MerchantService:
         await self._verify_menu_item_ownership(item_id, actor_merchant_id)
         group = await self._get_option_group_model(group_id)
         if group.menu_item_id != item_id:
-            raise NotFoundError(message="Option group not found")
+            raise NotFoundError(message=self._OPTION_GROUP_NOT_FOUND)
 
         option = await self._get_option_model(option_id)
         if option.option_group_id != group_id:
-            raise NotFoundError(message="Option not found")
+            raise NotFoundError(message=self._OPTION_NOT_FOUND)
 
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -881,11 +883,11 @@ class MerchantService:
         await self._verify_menu_item_ownership(item_id, actor_merchant_id)
         group = await self._get_option_group_model(group_id)
         if group.menu_item_id != item_id:
-            raise NotFoundError(message="Option group not found")
+            raise NotFoundError(message=self._OPTION_GROUP_NOT_FOUND)
 
         option = await self._get_option_model(option_id)
         if option.option_group_id != group_id:
-            raise NotFoundError(message="Option not found")
+            raise NotFoundError(message=self._OPTION_NOT_FOUND)
 
         option.soft_delete()
         await self.db.flush()

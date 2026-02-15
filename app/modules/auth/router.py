@@ -29,7 +29,7 @@ router = APIRouter(
 )
 
 
-async def get_auth_service(
+def get_auth_service(
     db: AsyncSession = Depends(get_db),
 ) -> AuthService:
     """Dependency injection for AuthService."""
