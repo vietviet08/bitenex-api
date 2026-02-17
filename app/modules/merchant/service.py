@@ -25,9 +25,9 @@ from app.modules.merchant.schemas import (
     AdminMerchantResponse,
     MenuItemCreate,
     MenuItemDetailResponse,
-    MenuListResponse,
     MenuItemResponse,
     MenuItemUpdate,
+    MenuListResponse,
     MerchantCreate,
     MerchantResponse,
     MerchantUpdate,
@@ -65,12 +65,8 @@ class MerchantService:
             merchant.city,
             merchant.phone,
         ]
-        has_required_text = all(
-            value is not None and str(value).strip() for value in required_text
-        )
-        has_coordinates = (
-            merchant.latitude is not None and merchant.longitude is not None
-        )
+        has_required_text = all(value is not None and str(value).strip() for value in required_text)
+        has_coordinates = merchant.latitude is not None and merchant.longitude is not None
         has_business_settings = (
             merchant.min_order_amount is not None
             and merchant.delivery_fee is not None
@@ -319,9 +315,7 @@ class MerchantService:
                 MenuItem.is_deleted.is_(False),
             )
             merchant_query = (
-                merchant_query.join(MenuItem, join_condition)
-                .where(category_filter)
-                .distinct()
+                merchant_query.join(MenuItem, join_condition).where(category_filter).distinct()
             )
             count_query = (
                 select(func.count(func.distinct(Merchant.id)))
@@ -417,9 +411,7 @@ class MerchantService:
             )
             .where(Merchant.is_deleted.is_(False))
         )
-        count_query = select(func.count(Merchant.id)).where(
-            Merchant.is_deleted.is_(False)
-        )
+        count_query = select(func.count(Merchant.id)).where(Merchant.is_deleted.is_(False))
 
         if status:
             status_filter = Merchant.status == status.value
@@ -427,9 +419,7 @@ class MerchantService:
             count_query = count_query.where(status_filter)
 
         query = (
-            query.order_by(Merchant.created_at.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
+            query.order_by(Merchant.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
         )
         rows = (await self.db.execute(query)).all()
 
@@ -455,9 +445,7 @@ class MerchantService:
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[list[MenuItemResponse], int]:
-        await self._get_merchant_model_by_id(
-            merchant_id, active_only=active_only_merchant
-        )
+        await self._get_merchant_model_by_id(merchant_id, active_only=active_only_merchant)
 
         filters = [
             MenuItem.merchant_id == merchant_id,
@@ -670,9 +658,7 @@ class MerchantService:
             options = options_result.scalars().all()
 
             group_response = OptionGroupResponse.model_validate(group)
-            group_response.options = [
-                OptionResponse.model_validate(opt) for opt in options
-            ]
+            group_response.options = [OptionResponse.model_validate(opt) for opt in options]
             result.append(group_response)
 
         return result
@@ -689,9 +675,7 @@ class MerchantService:
         """Verify the menu item exists and belongs to the merchant."""
         item = await self._get_menu_item_model(item_id)
         if item.merchant_id != actor_merchant_id:
-            raise AuthorizationError(
-                message="You can only manage options for your own menu items"
-            )
+            raise AuthorizationError(message="You can only manage options for your own menu items")
         return item
 
     async def _get_option_group_model(
@@ -897,4 +881,3 @@ class MerchantService:
 
         option.soft_delete()
         await self.db.flush()
-

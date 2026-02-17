@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_role
-from app.core.exceptions import NotFoundError
 from app.modules.order.schemas import (
+    AdminOrderListResponse,
     OrderCreate,
     OrderListResponse,
     OrderResponse,
@@ -58,10 +58,35 @@ async def get_my_orders(
     service: OrderService = Depends(get_order_service),
 ) -> OrderListResponse:
     """Get current user's orders."""
-    items, total = await service.get_user_orders(
-        user.user_id, status_filter, page, per_page
-    )
+    items, total = await service.get_user_orders(user.user_id, status_filter, page, per_page)
     return OrderListResponse(items=items, total=total)
+
+
+@router.get(
+    "/admin/list",
+    response_model=AdminOrderListResponse,
+    summary="Admin list orders",
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def admin_list_orders(
+    search: str | None = Query(default=None, description="Search by order/user/merchant/address"),
+    status_filter: OrderStatus | None = Query(default=None, alias="status"),
+    user_id: str | None = Query(default=None),
+    merchant_id: str | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    service: OrderService = Depends(get_order_service),
+) -> AdminOrderListResponse:
+    """List orders for admin operations."""
+    items, total = await service.get_admin_orders(
+        search=search,
+        status=status_filter,
+        user_id=user_id,
+        merchant_id=merchant_id,
+        page=page,
+        per_page=per_page,
+    )
+    return AdminOrderListResponse(items=items, total=total)
 
 
 @router.get(
@@ -120,9 +145,7 @@ async def get_merchant_orders(
 ) -> OrderListResponse:
     """Get orders for merchant."""
     merchant_id = await service.resolve_merchant_id_by_user_id(user.user_id)
-    items, total = await service.get_merchant_orders(
-        merchant_id, status_filter, page, per_page
-    )
+    items, total = await service.get_merchant_orders(merchant_id, status_filter, page, per_page)
     return OrderListResponse(items=items, total=total)
 
 
@@ -165,7 +188,5 @@ async def get_driver_orders(
 ) -> OrderListResponse:
     """Get orders assigned to driver."""
     driver_id = await service.resolve_driver_id_by_user_id(user.user_id)
-    items, total = await service.get_driver_orders(
-        driver_id, status_filter, page, per_page
-    )
+    items, total = await service.get_driver_orders(driver_id, status_filter, page, per_page)
     return OrderListResponse(items=items, total=total)

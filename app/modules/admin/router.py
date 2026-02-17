@@ -116,9 +116,7 @@ async def get_audit_logs(
     service: AdminService = Depends(get_admin_service),
 ) -> AuditLogListResponse:
     """Get audit logs with optional filters."""
-    items, total = await service.get_audit_logs(
-        admin_id, action, resource_type, page, per_page
-    )
+    items, total = await service.get_audit_logs(admin_id, action, resource_type, page, per_page)
     return AuditLogListResponse(items=items, total=total)
 
 

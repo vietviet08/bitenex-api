@@ -34,6 +34,21 @@ class PaymentResponse(BaseDTO, TimestampMixin):
     error_message: str | None = None
 
 
+class AdminPaymentListItem(PaymentResponse):
+    """Admin payment list item with reconciliation metrics."""
+
+    order_status: str | None = None
+    refunded_amount: float = 0.0
+    refundable_amount: float = 0.0
+
+
+class AdminPaymentListResponse(BaseDTO):
+    """Paginated admin payment list."""
+
+    items: list[AdminPaymentListItem]
+    total: int
+
+
 class RefundCreate(BaseDTO):
     """Create refund request."""
 

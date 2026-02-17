@@ -12,9 +12,9 @@ from app.modules.merchant.schemas import (
     AdminMerchantListResponse,
     MenuItemCreate,
     MenuItemDetailResponse,
-    MenuListResponse,
     MenuItemResponse,
     MenuItemUpdate,
+    MenuListResponse,
     MerchantListResponse,
     MerchantResponse,
     MerchantUpdate,
@@ -222,9 +222,7 @@ async def create_option_group(
 ) -> OptionGroupResponse:
     """Create an option group for a menu item."""
     merchant = await service.get_merchant_by_user_id(user.user_id)
-    return await service.create_option_group(
-        item_id, data, actor_merchant_id=merchant.id
-    )
+    return await service.create_option_group(item_id, data, actor_merchant_id=merchant.id)
 
 
 @router.get(
@@ -258,9 +256,7 @@ async def update_option_group(
 ) -> OptionGroupResponse:
     """Update an option group."""
     merchant = await service.get_merchant_by_user_id(user.user_id)
-    return await service.update_option_group(
-        item_id, group_id, data, actor_merchant_id=merchant.id
-    )
+    return await service.update_option_group(item_id, group_id, data, actor_merchant_id=merchant.id)
 
 
 @router.delete(
@@ -300,9 +296,7 @@ async def create_option(
 ) -> OptionResponse:
     """Create an option within an option group."""
     merchant = await service.get_merchant_by_user_id(user.user_id)
-    return await service.create_option(
-        item_id, group_id, data, actor_merchant_id=merchant.id
-    )
+    return await service.create_option(item_id, group_id, data, actor_merchant_id=merchant.id)
 
 
 @router.patch(
@@ -341,9 +335,7 @@ async def delete_option(
 ) -> MessageResponse:
     """Delete an option."""
     merchant = await service.get_merchant_by_user_id(user.user_id)
-    await service.delete_option(
-        item_id, group_id, option_id, actor_merchant_id=merchant.id
-    )
+    await service.delete_option(item_id, group_id, option_id, actor_merchant_id=merchant.id)
     return MessageResponse(message="Option deleted")
 
 

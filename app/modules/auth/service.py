@@ -171,9 +171,7 @@ class AuthService:
 
         # 5. Store refresh token
         # Parse expiry from settings
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            days=settings.refresh_token_expire_days
-        )
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
 
         await self._create_refresh_token_record(
             user_id=user.id,
@@ -247,8 +245,7 @@ class AuthService:
 
         # 5. Log verification URL (email sending out of scope)
         logger.info(
-            f"Verification token for {user.email}: "
-            f"/api/v1/auth/verify/{verification_token}"
+            f"Verification token for {user.email}: " f"/api/v1/auth/verify/{verification_token}"
         )
 
         logger.info(f"User {user.email} registered successfully")
@@ -354,9 +351,7 @@ class AuthService:
         # 6. Store new refresh token
         from datetime import timedelta
 
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            days=settings.refresh_token_expire_days
-        )
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
 
         await self._create_refresh_token_record(
             user_id=user_id,
@@ -589,4 +584,3 @@ class AuthService:
             raise NotFoundError(message=self._USER_NOT_FOUND_MESSAGE)
 
         return self._build_auth_user_response(user)
-

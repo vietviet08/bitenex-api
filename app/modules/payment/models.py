@@ -146,9 +146,7 @@ class WebhookEvent(BaseModel):
     transaction_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="RECEIVED", nullable=False)
-    processed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

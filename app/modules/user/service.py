@@ -29,9 +29,7 @@ class UserService:
     async def get_user_by_id(self, user_id: str) -> UserResponse:
         """Get user by ID."""
         result = await self.db.execute(
-            select(User).where(
-                User.id == user_id, User.is_deleted.is_(False)
-            )  # noqa: E712
+            select(User).where(User.id == user_id, User.is_deleted.is_(False))  # noqa: E712
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -41,9 +39,7 @@ class UserService:
     async def get_user_by_email(self, email: str) -> UserResponse | None:
         """Get user by email."""
         result = await self.db.execute(
-            select(User).where(
-                User.email == email, User.is_deleted.is_(False)
-            )  # noqa: E712
+            select(User).where(User.email == email, User.is_deleted.is_(False))  # noqa: E712
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -67,9 +63,7 @@ class UserService:
     async def update_user(self, user_id: str, data: UserUpdate) -> UserResponse:
         """Update user profile."""
         result = await self.db.execute(
-            select(User).where(
-                User.id == user_id, User.is_deleted.is_(False)
-            )  # noqa: E712
+            select(User).where(User.id == user_id, User.is_deleted.is_(False))  # noqa: E712
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -86,9 +80,7 @@ class UserService:
     async def delete_user(self, user_id: str) -> None:
         """Soft delete user."""
         result = await self.db.execute(
-            select(User).where(
-                User.id == user_id, User.is_deleted.is_(False)
-            )  # noqa: E712
+            select(User).where(User.id == user_id, User.is_deleted.is_(False))  # noqa: E712
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -165,14 +157,10 @@ class UserService:
 
         return [UserResponse.model_validate(u) for u in users], total
 
-    async def admin_update_user(
-        self, user_id: str, data: AdminUserUpdate
-    ) -> UserResponse:
+    async def admin_update_user(self, user_id: str, data: AdminUserUpdate) -> UserResponse:
         """Admin update user — can change role, active status, etc."""
         result = await self.db.execute(
-            select(User).where(
-                User.id == user_id, User.is_deleted.is_(False)
-            )  # noqa: E712
+            select(User).where(User.id == user_id, User.is_deleted.is_(False))  # noqa: E712
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -191,9 +179,7 @@ class UserService:
     async def set_user_active(self, user_id: str, *, is_active: bool) -> None:
         """Activate or deactivate a user."""
         result = await self.db.execute(
-            select(User).where(
-                User.id == user_id, User.is_deleted.is_(False)
-            )  # noqa: E712
+            select(User).where(User.id == user_id, User.is_deleted.is_(False))  # noqa: E712
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -246,4 +232,3 @@ class UserService:
 
         address.soft_delete()
         await self.db.commit()
-

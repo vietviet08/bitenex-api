@@ -65,7 +65,10 @@ async def test_vnpay_signature_utility() -> None:
         "vnp_SecureHash": secure_hash,
     }
     assert verify_vnpay_signature(signed_payload, settings.vnp_hash_secret) is True
-    assert verify_vnpay_signature({**signed_payload, "vnp_Amount": "999"}, settings.vnp_hash_secret) is False
+    assert (
+        verify_vnpay_signature({**signed_payload, "vnp_Amount": "999"}, settings.vnp_hash_secret)
+        is False
+    )
 
 
 @pytest.mark.asyncio

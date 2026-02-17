@@ -3,7 +3,12 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.core.exceptions import AuthorizationError, NotFoundError
 from app.modules.merchant.models import MenuItem, Merchant
-from app.modules.merchant.schemas import MenuItemCreate, MenuItemUpdate, MerchantCreate, MerchantUpdate
+from app.modules.merchant.schemas import (
+    MenuItemCreate,
+    MenuItemUpdate,
+    MerchantCreate,
+    MerchantUpdate,
+)
 from app.modules.merchant.service import MerchantService
 from app.modules.user.models import User
 from app.shared.enums import MerchantStatus
@@ -136,11 +141,11 @@ async def test_create_and_update_merchant(db_session):
         created.id,
         MerchantUpdate(
             name="Merchant Updated",
-                description="Updated description",
-                city="Ha Noi",
-                phone="+84901234567",
-                latitude=21.0285,
-                longitude=105.8542,
+            description="Updated description",
+            city="Ha Noi",
+            phone="+84901234567",
+            latitude=21.0285,
+            longitude=105.8542,
             logo_url="https://cdn.test/logo.png",
             cover_image_url="https://cdn.test/cover.png",
             delivery_fee=3.0,

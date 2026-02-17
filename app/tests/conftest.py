@@ -3,6 +3,7 @@
 # =============================================================================
 
 import asyncio
+import os
 from typing import AsyncGenerator, Generator
 
 import pytest
@@ -10,6 +11,13 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+# Provide default VNPAY settings for test runs before app imports trigger Settings().
+os.environ.setdefault("VNP_TMN_CODE", "TESTTMN")
+os.environ.setdefault("VNP_HASH_SECRET", "TESTHASHSECRET")
+os.environ.setdefault("VNP_URL", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html")
+os.environ.setdefault("VNP_RETURN_URL", "bitenexuser://payment/result")
+os.environ.setdefault("VNP_IPN_URL", "https://example.com/api/v1/payments/vnpay/ipn")
 
 from app.core.database import Base, get_db
 from app.core.security import create_access_token

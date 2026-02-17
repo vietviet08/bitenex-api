@@ -66,9 +66,7 @@ class BaseModel(Base):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""
-        return {
-            column.name: getattr(self, column.name) for column in self.__table__.columns
-        }
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(id={self.id})>"
