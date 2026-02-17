@@ -147,6 +147,34 @@ class PaymentError(BusinessError):
     error_code = "PAYMENT_ERROR"
 
 
+class InvalidPaymentSignatureError(ValidationError):
+    """Raised when a payment callback/webhook signature is invalid."""
+
+    message = "Invalid payment signature"
+    error_code = "INVALID_PAYMENT_SIGNATURE"
+
+
+class DuplicateWebhookError(ConflictError):
+    """Raised when a webhook event is delivered more than once."""
+
+    message = "Duplicate webhook event"
+    error_code = "DUPLICATE_WEBHOOK"
+
+
+class IdempotencyConflictError(ConflictError):
+    """Raised when an idempotency key is reused with different payload."""
+
+    message = "Idempotency key conflict"
+    error_code = "IDEMPOTENCY_CONFLICT"
+
+
+class InvalidStateTransitionError(ValidationError):
+    """Raised when order/payment state transition is not allowed."""
+
+    message = "Invalid state transition"
+    error_code = "INVALID_STATE_TRANSITION"
+
+
 class DispatchError(BusinessError):
     """Raised for dispatch/delivery-related errors."""
 

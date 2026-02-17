@@ -2,14 +2,14 @@
 # Payment Module - API Router
 # =============================================================================
 
-from typing import Any, cast
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ValidationError
 from app.modules.payment.schemas import (
     AddPaymentMethodRequest,
     PaymentCreate,
@@ -27,7 +27,7 @@ router = APIRouter(
 )
 
 
-async def get_payment_service(
+def get_payment_service(
     db: AsyncSession = Depends(get_db),
 ) -> PaymentService:
     return PaymentService(db)
@@ -44,11 +44,25 @@ async def get_payment_service(
 )
 async def create_payment(
     data: PaymentCreate,
+    request: Request,
     user: CurrentUser,
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
     service: PaymentService = Depends(get_payment_service),
 ) -> PaymentResponse:
     """Process payment for an order."""
-    return await service.create_payment(user.user_id, data)
+    if not idempotency_key:
+        raise ValidationError(
+            message="Idempotency-Key header is required",
+            error_code="IDEMPOTENCY_KEY_REQUIRED",
+        )
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    return await service.create_payment(
+        user.user_id,
+        data,
+        idempotency_key=idempotency_key,
+        endpoint=str(request.url.path),
+        client_ip=client_ip,
+    )
 
 
 @router.get(
@@ -57,15 +71,34 @@ async def create_payment(
     summary="Get payment",
 )
 async def get_payment(
-    payment_id: str,
+    payment_id: UUID,
     user: CurrentUser,
     service: PaymentService = Depends(get_payment_service),
 ) -> PaymentResponse:
     """Get payment by ID."""
-    payment = await service.get_payment(payment_id)
-    if payment is None:
-        raise NotFoundError("Payment", payment_id)
-    return payment
+    return await service.get_payment(
+        str(payment_id),
+        actor_user_id=user.user_id,
+        actor_role=user.role,
+    )
+
+
+@router.get(
+    "/transaction/{transaction_id}",
+    response_model=PaymentResponse,
+    summary="Get payment by transaction ID",
+)
+async def get_payment_by_transaction(
+    transaction_id: str,
+    user: CurrentUser,
+    service: PaymentService = Depends(get_payment_service),
+) -> PaymentResponse:
+    """Get payment by transaction reference."""
+    return await service.get_payment_by_transaction(
+        transaction_id,
+        actor_user_id=user.user_id,
+        actor_role=user.role,
+    )
 
 
 @router.get(
@@ -79,7 +112,11 @@ async def get_order_payments(
     service: PaymentService = Depends(get_payment_service),
 ) -> list[PaymentResponse]:
     """Get all payments for an order."""
-    return await service.get_order_payments(order_id)
+    return await service.get_order_payments(
+        order_id,
+        actor_user_id=user.user_id,
+        actor_role=user.role,
+    )
 
 
 # =============================================================================
@@ -94,11 +131,23 @@ async def get_order_payments(
 )
 async def process_refund(
     data: RefundCreate,
+    request: Request,
     user: CurrentUser,
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
     service: PaymentService = Depends(get_payment_service),
 ) -> RefundResponse:
     """Process a refund. Admin only."""
-    return await service.process_refund(data, user.user_id)
+    if not idempotency_key:
+        raise ValidationError(
+            message="Idempotency-Key header is required",
+            error_code="IDEMPOTENCY_KEY_REQUIRED",
+        )
+    return await service.process_refund(
+        data,
+        user.user_id,
+        idempotency_key=idempotency_key,
+        endpoint=str(request.url.path),
+    )
 
 
 # =============================================================================
@@ -165,11 +214,24 @@ async def set_default_payment_method(
 # =============================================================================
 # Webhook Endpoint
 # =============================================================================
-@router.post(
+async def _read_webhook_payload(request: Request) -> dict:
+    if request.query_params:
+        return dict(request.query_params)
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            return body
+    except Exception:
+        pass
+    return {}
+
+
+@router.api_route(
     "/webhook/{gateway}",
+    methods=["GET", "POST"],
     status_code=status.HTTP_200_OK,
     summary="Payment gateway webhook",
-    include_in_schema=False,  # Hide from docs
+    include_in_schema=False,
 )
 async def payment_webhook(
     gateway: str,
@@ -177,6 +239,6 @@ async def payment_webhook(
     service: PaymentService = Depends(get_payment_service),
 ) -> dict[str, str]:
     """Handle payment gateway webhooks."""
-    payload = cast(dict[str, Any], await request.json())
-    await service.handle_webhook(gateway, payload)
-    return {"status": "received"}
+    payload = await _read_webhook_payload(request)
+    result = await service.handle_webhook(gateway, payload)
+    return result
