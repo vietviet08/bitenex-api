@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -28,10 +32,8 @@ jobs:
           python - <<'PY'
           import tomllib, pathlib
           data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
-          v = data["project"]["version"]
-          print(f"version={v}")
+          print(data["project"]["version"])
           PY
-          # export for next steps
           echo "version=$(python - <<'PY'
           import tomllib, pathlib
           data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
@@ -49,7 +51,13 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push tag
+      - name: Configure git identity
+        if: steps.tagcheck.outputs.exists != 'true'
+        run: |
+          git config user.name "vietviet08"
+          git config user.email "vietnq@bitenex.com"
+
+      - name: Create and push tag (annotated)
         if: steps.tagcheck.outputs.exists != 'true'
         run: |
           TAG="v${{ steps.ver.outputs.version }}"
