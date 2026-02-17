@@ -230,9 +230,7 @@ class TestTokenRefresh:
         # New tokens should be different
         assert data["refresh_token"] != tokens["refresh_token"]
 
-    async def test_refresh_with_revoked_token(
-        self, client: AsyncClient, test_user: User
-    ):
+    async def test_refresh_with_revoked_token(self, client: AsyncClient, test_user: User):
         """Test refresh with revoked token fails."""
         # Login to get tokens
         login_response = await client.post(
@@ -354,9 +352,7 @@ class TestGetCurrentUser:
 class TestEmailVerification:
     """Tests for email verification."""
 
-    async def test_verify_email_success(
-        self, client: AsyncClient, unverified_user: User
-    ):
+    async def test_verify_email_success(self, client: AsyncClient, unverified_user: User):
         """Test successful email verification."""
         token = create_verification_token(unverified_user.id)
 
@@ -397,9 +393,7 @@ class TestPasswordChange:
         )
         assert login_response.status_code == 200
 
-    async def test_change_password_wrong_current(
-        self, client: AsyncClient, test_user: User
-    ):
+    async def test_change_password_wrong_current(self, client: AsyncClient, test_user: User):
         """Test password change with wrong current password fails."""
         response = await client.post(
             "/api/v1/auth/password/change",
@@ -416,9 +410,7 @@ class TestPasswordChange:
 class TestPasswordReset:
     """Tests for password reset flow."""
 
-    async def test_request_reset_existing_email(
-        self, client: AsyncClient, test_user: User
-    ):
+    async def test_request_reset_existing_email(self, client: AsyncClient, test_user: User):
         """Test password reset request for existing email."""
         response = await client.post(
             "/api/v1/auth/password/reset",

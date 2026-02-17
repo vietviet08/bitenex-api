@@ -4,7 +4,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,6 +12,7 @@ from app.core.dependencies import CurrentUser, RequireAdmin
 from app.core.exceptions import ValidationError
 from app.modules.payment.schemas import (
     AddPaymentMethodRequest,
+    AdminPaymentListResponse,
     PaymentCreate,
     PaymentResponse,
     RefundCreate,
@@ -20,6 +21,7 @@ from app.modules.payment.schemas import (
 )
 from app.modules.payment.service import PaymentService
 from app.shared.dto import MessageResponse
+from app.shared.enums import PaymentMethod, PaymentStatus
 
 router = APIRouter(
     prefix="/payments",
@@ -63,6 +65,35 @@ async def create_payment(
         endpoint=str(request.url.path),
         client_ip=client_ip,
     )
+
+
+@router.get(
+    "/admin/list",
+    response_model=AdminPaymentListResponse,
+    summary="Admin list payments",
+    dependencies=[RequireAdmin],
+)
+async def admin_list_payments(
+    search: str | None = Query(
+        default=None, description="Search by payment/order/transaction/user"
+    ),
+    status_filter: PaymentStatus | None = Query(default=None, alias="status"),
+    method: PaymentMethod | None = Query(default=None),
+    order_id: str | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    service: PaymentService = Depends(get_payment_service),
+) -> AdminPaymentListResponse:
+    """List payments for admin dashboards."""
+    items, total = await service.get_admin_payments(
+        search=search,
+        status=status_filter,
+        method=method,
+        order_id=order_id,
+        page=page,
+        per_page=per_page,
+    )
+    return AdminPaymentListResponse(items=items, total=total)
 
 
 @router.get(

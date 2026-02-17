@@ -150,9 +150,7 @@ async def test_admin_can_approve_merchant(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
-async def test_admin_list_pending_merchants_with_owner_metadata(
-    client: AsyncClient, db_session
-):
+async def test_admin_list_pending_merchants_with_owner_metadata(client: AsyncClient, db_session):
     owner = User(
         email="pending.owner@example.com",
         password_hash="hash",

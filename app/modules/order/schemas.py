@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import Field
 
 from app.shared.dto import BaseDTO, TimestampMixin
-from app.shared.enums import OrderStatus
+from app.shared.enums import OrderStatus, PaymentStatus
 
 
 class SelectedOptionInput(BaseDTO):
@@ -86,10 +86,38 @@ class OrderResponse(BaseDTO, TimestampMixin):
     items: list[OrderItemResponse] = []
 
 
+class AdminOrderListItem(BaseDTO, TimestampMixin):
+    """Admin order list item."""
+
+    id: str
+    order_number: str
+    user_id: str
+    merchant_id: str
+    driver_id: str | None = None
+    status: OrderStatus
+    subtotal: float
+    delivery_fee: float
+    tax: float
+    discount: float
+    total: float
+    delivery_address: str
+    customer_note: str | None = None
+    payment_status: PaymentStatus | None = None
+    latest_payment_id: str | None = None
+    latest_transaction_id: str | None = None
+
+
 class OrderListResponse(BaseDTO):
     """Paginated order list."""
 
     items: list[OrderResponse]
+    total: int
+
+
+class AdminOrderListResponse(BaseDTO):
+    """Paginated admin order list."""
+
+    items: list[AdminOrderListItem]
     total: int
 
 

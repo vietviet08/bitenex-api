@@ -5,9 +5,10 @@
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -17,9 +18,15 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.modules.driver.models import Driver
-from app.modules.merchant.models import MenuItem, MenuItemOption, MenuItemOptionGroup, Merchant
+from app.modules.merchant.models import (
+    MenuItem,
+    MenuItemOption,
+    MenuItemOptionGroup,
+    Merchant,
+)
 from app.modules.order.models import Order, OrderItem, OrderStatusHistory
 from app.modules.order.schemas import (
+    AdminOrderListItem,
     OrderCreate,
     OrderItemCreate,
     OrderItemResponse,
@@ -28,8 +35,7 @@ from app.modules.order.schemas import (
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
-from app.shared.enums import OrderStatus
-from app.shared.enums import MerchantStatus, PaymentStatus, Role
+from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
 
 
 class OrderService:
@@ -223,6 +229,36 @@ class OrderService:
         response.items = [OrderItemResponse.model_validate(item) for item in items]
         return response
 
+    @staticmethod
+    def _to_admin_order_item(
+        order: Order,
+        latest_payment: Payment | None = None,
+    ) -> AdminOrderListItem:
+        return AdminOrderListItem(
+            id=order.id,
+            order_number=order.order_number,
+            user_id=order.user_id,
+            merchant_id=order.merchant_id,
+            driver_id=order.driver_id,
+            status=OrderStatus(order.status),
+            subtotal=float(order.subtotal),
+            delivery_fee=float(order.delivery_fee),
+            tax=float(order.tax),
+            discount=float(order.discount),
+            total=float(order.total),
+            delivery_address=order.delivery_address,
+            customer_note=order.customer_note,
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+            payment_status=(
+                PaymentStatus(latest_payment.status) if latest_payment is not None else None
+            ),
+            latest_payment_id=latest_payment.id if latest_payment is not None else None,
+            latest_transaction_id=(
+                latest_payment.transaction_id if latest_payment is not None else None
+            ),
+        )
+
     async def resolve_merchant_id_by_user_id(self, user_id: str) -> str:
         return await self._get_merchant_id_by_user_id(user_id)
 
@@ -255,8 +291,7 @@ class OrderService:
 
         grouped_items = await self._get_order_items_for_orders([order.id for order in orders])
         responses = [
-            self._to_order_response(order, grouped_items.get(order.id, []))
-            for order in orders
+            self._to_order_response(order, grouped_items.get(order.id, [])) for order in orders
         ]
         return responses, total
 
@@ -300,7 +335,9 @@ class OrderService:
             )
             menu_item = menu_result.scalar_one_or_none()
             if not menu_item:
-                raise ValidationError(message=f"Menu item '{requested_item.menu_item_id}' not found")
+                raise ValidationError(
+                    message=f"Menu item '{requested_item.menu_item_id}' not found"
+                )
             if not menu_item.is_available:
                 raise ValidationError(message=f"Menu item '{menu_item.name}' is unavailable")
 
@@ -347,7 +384,7 @@ class OrderService:
                 quantity=requested_item.quantity,
                 subtotal=item_subtotal,
                 notes=requested_item.notes,
-                selected_options=json.dumps(option_snapshot) if option_snapshot else None,
+                selected_options=(json.dumps(option_snapshot) if option_snapshot else None),
             )
             order_items.append(order_item)
             self.db.add(order_item)
@@ -419,7 +456,9 @@ class OrderService:
             actor_role=actor_role,
         )
         current_status = OrderStatus(order.status)
-        new_status = data.status if isinstance(data.status, OrderStatus) else OrderStatus(data.status)
+        new_status = (
+            data.status if isinstance(data.status, OrderStatus) else OrderStatus(data.status)
+        )
 
         if current_status == new_status:
             order_items = await self._get_order_items(order.id)
@@ -504,6 +543,74 @@ class OrderService:
             per_page=per_page,
         )
 
+    async def get_admin_orders(
+        self,
+        *,
+        search: str | None = None,
+        status: OrderStatus | None = None,
+        user_id: str | None = None,
+        merchant_id: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[AdminOrderListItem], int]:
+        """List orders for admin management."""
+        filters = [Order.is_deleted.is_(False)]
+        if status:
+            filters.append(Order.status == status.value)
+        if user_id:
+            filters.append(Order.user_id == user_id.strip())
+        if merchant_id:
+            filters.append(Order.merchant_id == merchant_id.strip())
+        if search:
+            term = f"%{search.strip()}%"
+            filters.append(
+                or_(
+                    Order.id.ilike(term),
+                    Order.order_number.ilike(term),
+                    Order.user_id.ilike(term),
+                    Order.merchant_id.ilike(term),
+                    Order.delivery_address.ilike(term),
+                )
+            )
+
+        query = (
+            select(Order)
+            .where(*filters)
+            .order_by(Order.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        count_query = select(func.count(Order.id)).where(*filters)
+
+        orders = (await self.db.execute(query)).scalars().all()
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        order_ids = [order.id for order in orders]
+        latest_payment_map: dict[str, Payment] = {}
+        if order_ids:
+            payments = (
+                (
+                    await self.db.execute(
+                        select(Payment)
+                        .where(
+                            Payment.order_id.in_(order_ids),
+                            Payment.is_deleted.is_(False),
+                        )
+                        .order_by(Payment.order_id.asc(), Payment.created_at.asc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+            for payment in payments:
+                latest_payment_map[payment.order_id] = payment
+
+        items = [
+            self._to_admin_order_item(order, latest_payment_map.get(order.id)) for order in orders
+        ]
+        return items, total
+
     async def cancel_order(
         self,
         order_id: str,
@@ -544,23 +651,27 @@ class OrderService:
             )
         )
 
-        completed_payment = (await self.db.execute(
-            select(Payment)
-            .where(
-                Payment.order_id == order.id,
-                Payment.is_deleted == False,
-                Payment.status == PaymentStatus.COMPLETED.value,
+        completed_payment = (
+            await self.db.execute(
+                select(Payment)
+                .where(
+                    Payment.order_id == order.id,
+                    Payment.is_deleted == False,
+                    Payment.status == PaymentStatus.COMPLETED.value,
+                )
+                .order_by(Payment.created_at.desc())
             )
-            .order_by(Payment.created_at.desc())
-        )).scalar_one_or_none()
+        ).scalar_one_or_none()
 
         if completed_payment:
-            existing_refund = (await self.db.execute(
-                select(Refund).where(
-                    Refund.payment_id == completed_payment.id,
-                    Refund.is_deleted == False,
+            existing_refund = (
+                await self.db.execute(
+                    select(Refund).where(
+                        Refund.payment_id == completed_payment.id,
+                        Refund.is_deleted == False,
+                    )
                 )
-            )).scalar_one_or_none()
+            ).scalar_one_or_none()
             if not existing_refund:
                 self.db.add(
                     Refund(
@@ -612,4 +723,3 @@ class OrderService:
         }
 
         return new in allowed_transitions.get(current, [])
-

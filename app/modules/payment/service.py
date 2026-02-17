@@ -2,6 +2,15 @@
 # Payment Module - Service Layer
 # =============================================================================
 
+import hashlib
+import json
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any
+from uuid import uuid4
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -14,16 +23,13 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.modules.order.models import Order, OrderStatusHistory
-from app.modules.payment.models import (
-    IdempotencyKey,
-    Payment,
-    PaymentMethod as PaymentMethodModel,
-    Refund,
-    WebhookEvent,
-)
+from app.modules.payment.models import IdempotencyKey, Payment
+from app.modules.payment.models import PaymentMethod as PaymentMethodModel
+from app.modules.payment.models import Refund, WebhookEvent
 from app.modules.payment.repository import PaymentRepository
 from app.modules.payment.schemas import (
     AddPaymentMethodRequest,
+    AdminPaymentListItem,
     PaymentCreate,
     PaymentResponse,
     RefundCreate,
@@ -32,7 +38,6 @@ from app.modules.payment.schemas import (
 )
 from app.modules.payment.vnpay import build_vnpay_payment_url, verify_vnpay_signature
 from app.shared.enums import OrderStatus, PaymentMethod, PaymentStatus, Role
-
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -119,9 +124,7 @@ class PaymentService:
                 request_fingerprint=request_fingerprint,
             )
             if replay is None:
-                raise IdempotencyConflictError(
-                    message="Unable to replay idempotent response"
-                )
+                raise IdempotencyConflictError(message="Unable to replay idempotent response")
             return replay
 
     @staticmethod
@@ -133,6 +136,20 @@ class PaymentService:
         response = PaymentResponse.model_validate(payment)
         response.payment_url = payment_url
         return response
+
+    @staticmethod
+    def _to_admin_payment_item(
+        payment: Payment,
+        *,
+        order_status: str | None,
+        refunded_amount: float,
+    ) -> AdminPaymentListItem:
+        return AdminPaymentListItem(
+            **PaymentResponse.model_validate(payment).model_dump(mode="python"),
+            order_status=order_status,
+            refunded_amount=round(refunded_amount, 2),
+            refundable_amount=round(max(float(payment.amount) - refunded_amount, 0.0), 2),
+        )
 
     @staticmethod
     def _to_refund_response(refund: Refund) -> RefundResponse:
@@ -232,9 +249,7 @@ class PaymentService:
         )
 
         payment_method = (
-            data.method
-            if isinstance(data.method, PaymentMethod)
-            else PaymentMethod(data.method)
+            data.method if isinstance(data.method, PaymentMethod) else PaymentMethod(data.method)
         )
 
         payload_for_fingerprint = {
@@ -252,30 +267,22 @@ class PaymentService:
             request_fingerprint=request_fingerprint,
         )
         if replay is not None:
-            logger.info(
-                "payment.create.replay trace_id=%s key=%s", trace_id, idempotency_key
-            )
+            logger.info("payment.create.replay trace_id=%s key=%s", trace_id, idempotency_key)
             return PaymentResponse.model_validate(replay)
 
         if data.amount <= 0:
             raise ValidationError(message="Payment amount must be greater than zero")
         if payment_method == PaymentMethod.CASH_ON_DELIVERY:
-            raise ValidationError(
-                message="Online payment endpoint does not accept cash method"
-            )
+            raise ValidationError(message="Online payment endpoint does not accept cash method")
 
-        order = await self._get_order_for_payment(
-            user_id=user_id, order_id=data.order_id
-        )
+        order = await self._get_order_for_payment(user_id=user_id, order_id=data.order_id)
 
         if OrderStatus(order.status) in {
             OrderStatus.CANCELLED,
             OrderStatus.DELIVERED,
             OrderStatus.REFUNDED,
         }:
-            raise ValidationError(
-                message=f"Order is not payable in status {order.status}"
-            )
+            raise ValidationError(message=f"Order is not payable in status {order.status}")
 
         if round(float(order.total), 2) != round(float(data.amount), 2):
             raise ValidationError(
@@ -404,6 +411,84 @@ class PaymentService:
             responses.append(self._to_payment_response(payment))
         return responses
 
+    async def get_admin_payments(
+        self,
+        *,
+        search: str | None = None,
+        status: PaymentStatus | None = None,
+        method: PaymentMethod | None = None,
+        order_id: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[AdminPaymentListItem], int]:
+        """List payments for admin operations."""
+        filters = [Payment.is_deleted.is_(False)]
+        if status:
+            filters.append(Payment.status == status.value)
+        if method:
+            filters.append(Payment.method == method.value)
+        if order_id:
+            filters.append(Payment.order_id == order_id.strip())
+        if search:
+            term = f"%{search.strip()}%"
+            filters.append(
+                or_(
+                    Payment.id.ilike(term),
+                    Payment.transaction_id.ilike(term),
+                    Payment.order_id.ilike(term),
+                    Payment.user_id.ilike(term),
+                )
+            )
+
+        query = (
+            select(Payment)
+            .where(*filters)
+            .order_by(Payment.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        count_query = select(func.count(Payment.id)).where(*filters)
+
+        payments = (await self.db.execute(query)).scalars().all()
+        total = (await self.db.execute(count_query)).scalar_one()
+        if not payments:
+            return [], total
+
+        payment_ids = [payment.id for payment in payments]
+        refund_rows = (
+            await self.db.execute(
+                select(Refund.payment_id, func.coalesce(func.sum(Refund.amount), 0.0))
+                .where(
+                    Refund.payment_id.in_(payment_ids),
+                    Refund.is_deleted.is_(False),
+                    Refund.status.in_(["PENDING", "PROCESSING", "COMPLETED"]),
+                )
+                .group_by(Refund.payment_id)
+            )
+        ).all()
+        refunded_amount_map = {row[0]: float(row[1]) for row in refund_rows}
+
+        order_ids = list({payment.order_id for payment in payments})
+        order_rows = (
+            await self.db.execute(
+                select(Order.id, Order.status).where(
+                    Order.id.in_(order_ids),
+                    Order.is_deleted.is_(False),
+                )
+            )
+        ).all()
+        order_status_map = {row[0]: row[1] for row in order_rows}
+
+        items = [
+            self._to_admin_payment_item(
+                payment,
+                order_status=order_status_map.get(payment.order_id),
+                refunded_amount=refunded_amount_map.get(payment.id, 0.0),
+            )
+            for payment in payments
+        ]
+        return items, total
+
     async def process_refund(
         self,
         data: RefundCreate,
@@ -436,9 +521,7 @@ class PaymentService:
             request_fingerprint=request_fingerprint,
         )
         if replay is not None:
-            logger.info(
-                "payment.refund.replay trace_id=%s key=%s", trace_id, idempotency_key
-            )
+            logger.info("payment.refund.replay trace_id=%s key=%s", trace_id, idempotency_key)
             return RefundResponse.model_validate(replay)
 
         payment_result = await self.db.execute(
@@ -470,9 +553,7 @@ class PaymentService:
         ).scalar_one()
 
         remaining_amount = float(payment.amount) - float(total_refunded)
-        refund_amount = (
-            float(data.amount) if data.amount is not None else remaining_amount
-        )
+        refund_amount = float(data.amount) if data.amount is not None else remaining_amount
 
         if refund_amount <= 0:
             raise ValidationError(message="Refund amount must be greater than zero")
@@ -527,9 +608,7 @@ class PaymentService:
             status_code=201,
             payload=payload,
         )
-        logger.info(
-            "payment.refund.success trace_id=%s refund_id=%s", trace_id, refund.id
-        )
+        logger.info("payment.refund.success trace_id=%s refund_id=%s", trace_id, refund.id)
         return RefundResponse.model_validate(replay_payload)
 
     @staticmethod
@@ -575,9 +654,7 @@ class PaymentService:
             gateway=normalized_gateway,
             event_id=event_id,
             event_type=str(
-                payload.get("vnp_ResponseCode")
-                or payload.get("vnp_TransactionStatus")
-                or "UNKNOWN"
+                payload.get("vnp_ResponseCode") or payload.get("vnp_TransactionStatus") or "UNKNOWN"
             ),
             transaction_id=str(payload.get("vnp_TxnRef") or ""),
             payload=json.dumps(payload, sort_keys=True),
@@ -631,9 +708,7 @@ class PaymentService:
             if self._is_vnp_success(payload):
                 if PaymentStatus(payment.status) != PaymentStatus.COMPLETED:
                     payment.status = PaymentStatus.COMPLETED.value
-                    payment.gateway_transaction_id = str(
-                        payload.get("vnp_TransactionNo") or None
-                    )
+                    payment.gateway_transaction_id = str(payload.get("vnp_TransactionNo") or None)
                     payment.gateway_response = json.dumps(payload, sort_keys=True)
                     payment.error_code = None
                     payment.error_message = None
@@ -667,9 +742,7 @@ class PaymentService:
                     PaymentStatus.REFUNDED,
                 }:
                     payment.status = PaymentStatus.FAILED.value
-                    payment.error_code = str(
-                        payload.get("vnp_ResponseCode") or "UNKNOWN"
-                    )
+                    payment.error_code = str(payload.get("vnp_ResponseCode") or "UNKNOWN")
                     payment.error_message = "Payment failed via VNPAY webhook"
                     payment.gateway_response = json.dumps(payload, sort_keys=True)
 
