@@ -3,6 +3,7 @@
 # =============================================================================
 
 import json
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -24,6 +25,8 @@ from app.modules.merchant.models import (
     MenuItemOptionGroup,
     Merchant,
 )
+from app.modules.notification.schemas import NotificationCreate
+from app.modules.notification.service import NotificationService
 from app.modules.order.models import Order, OrderItem, OrderStatusHistory
 from app.modules.order.schemas import (
     AdminOrderListItem,
@@ -35,7 +38,18 @@ from app.modules.order.schemas import (
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
-from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
+from app.realtime.events import RealtimeEventType
+from app.realtime.socket_manager import connection_manager
+from app.shared.enums import (
+    MerchantStatus,
+    NotificationChannel,
+    NotificationType,
+    OrderStatus,
+    PaymentStatus,
+    Role,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class OrderService:
@@ -46,6 +60,14 @@ class OrderService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _normalize_role(actor_role: Role | str | None) -> Role | None:
+        if actor_role is None:
+            return None
+        if isinstance(actor_role, Role):
+            return actor_role
+        return Role(actor_role)
 
     @staticmethod
     def _generate_order_number() -> str:
@@ -177,6 +199,15 @@ class OrderService:
             raise NotFoundError(message="Merchant profile not found")
         return merchant_id
 
+    async def _get_merchant_owner_user_id(self, merchant_id: str) -> str | None:
+        result = await self.db.execute(
+            select(Merchant.user_id).where(
+                Merchant.id == merchant_id,
+                Merchant.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def _get_driver_id_by_user_id(self, user_id: str) -> str:
         result = await self.db.execute(
             select(Driver.id).where(
@@ -219,6 +250,97 @@ class OrderService:
             if order.driver_id != driver_id:
                 raise AuthorizationError(message="You can only access assigned orders")
             return
+
+    async def _emit_order_status_event(
+        self,
+        order: Order,
+        *,
+        previous_status: OrderStatus | None,
+        reason: str | None,
+    ) -> None:
+        payload = {
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "previous_status": previous_status.value if previous_status else None,
+            "new_status": order.status,
+            "merchant_id": order.merchant_id,
+            "user_id": order.user_id,
+            "reason": reason,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        envelope = {
+            "event": RealtimeEventType.ORDER_STATUS_CHANGED.value,
+            "data": payload,
+        }
+
+        await connection_manager.send_personal(order.user_id, envelope)
+        merchant_owner_user_id = await self._get_merchant_owner_user_id(order.merchant_id)
+        if merchant_owner_user_id:
+            await connection_manager.send_personal(merchant_owner_user_id, envelope)
+
+    async def _notify_status_change(
+        self,
+        order: Order,
+        *,
+        previous_status: OrderStatus | None,
+        reason: str | None,
+        actor_role: Role | str | None,
+    ) -> None:
+        role = self._normalize_role(actor_role)
+        current_status = OrderStatus(order.status)
+        service = NotificationService(self.db)
+
+        user_title = "Order status updated"
+        user_body = f"Order {order.order_number} status changed to {current_status.value}."
+
+        if role == Role.MERCHANT and current_status == OrderStatus.PREPARING:
+            user_title = "Order accepted by merchant"
+            user_body = f"Merchant accepted order {order.order_number} and started preparing it."
+        elif role == Role.MERCHANT and current_status == OrderStatus.CANCELLED:
+            user_title = "Order rejected by merchant"
+            user_body = f"Merchant rejected order {order.order_number}."
+        elif current_status == OrderStatus.CANCELLED:
+            user_title = "Order cancelled"
+            user_body = f"Order {order.order_number} has been cancelled."
+
+        await service.send_notification(
+            NotificationCreate(
+                user_id=order.user_id,
+                type=NotificationType.ORDER_UPDATE,
+                channel=NotificationChannel.IN_APP,
+                title=user_title,
+                body=user_body,
+                data={
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                    "previous_status": previous_status.value if previous_status else None,
+                    "new_status": order.status,
+                    "reason": reason,
+                    "actor_role": role.value if role else None,
+                },
+            )
+        )
+
+        if role == Role.USER and current_status == OrderStatus.CANCELLED:
+            merchant_owner_user_id = await self._get_merchant_owner_user_id(order.merchant_id)
+            if merchant_owner_user_id:
+                await service.send_notification(
+                    NotificationCreate(
+                        user_id=merchant_owner_user_id,
+                        type=NotificationType.ORDER_UPDATE,
+                        channel=NotificationChannel.IN_APP,
+                        title="Order cancelled by customer",
+                        body=f"Customer cancelled order {order.order_number}.",
+                        data={
+                            "order_id": order.id,
+                            "order_number": order.order_number,
+                            "previous_status": previous_status.value if previous_status else None,
+                            "new_status": order.status,
+                            "reason": reason,
+                            "actor_role": role.value,
+                        },
+                    )
+                )
 
     @staticmethod
     def _to_order_response(
@@ -464,6 +586,14 @@ class OrderService:
             order_items = await self._get_order_items(order.id)
             return self._to_order_response(order, order_items)
 
+        if new_status == OrderStatus.CANCELLED:
+            return await self.cancel_order(
+                order_id=order_id,
+                reason=data.reason or "Order cancelled",
+                cancelled_by=changed_by or "system",
+                actor_role=actor_role,
+            )
+
         if not self._validate_status_transition(current_status, new_status):
             raise InvalidStateTransitionError(
                 message=f"Invalid transition from {current_status.value} to {new_status.value}"
@@ -481,6 +611,26 @@ class OrderService:
         )
         await self.db.flush()
         await self.db.refresh(order)
+
+        try:
+            await self._emit_order_status_event(
+                order,
+                previous_status=current_status,
+                reason=data.reason,
+            )
+            await self._notify_status_change(
+                order,
+                previous_status=current_status,
+                reason=data.reason,
+                actor_role=actor_role,
+            )
+        except Exception as notify_error:
+            logger.warning(
+                "order.update_status.notify_failed order_id=%s status=%s error=%s",
+                order.id,
+                order.status,
+                str(notify_error),
+            )
 
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
@@ -686,6 +836,25 @@ class OrderService:
 
         await self.db.flush()
         await self.db.refresh(order)
+
+        try:
+            await self._emit_order_status_event(
+                order,
+                previous_status=current_status,
+                reason=reason or "Order cancelled",
+            )
+            await self._notify_status_change(
+                order,
+                previous_status=current_status,
+                reason=reason or "Order cancelled",
+                actor_role=actor_role,
+            )
+        except Exception as notify_error:
+            logger.warning(
+                "order.cancel.notify_failed order_id=%s error=%s",
+                order.id,
+                str(notify_error),
+            )
 
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
