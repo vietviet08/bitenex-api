@@ -22,6 +22,9 @@ from app.core.exceptions import (
     NotFoundError,
     ValidationError,
 )
+from app.modules.merchant.models import Merchant
+from app.modules.notification.schemas import NotificationCreate
+from app.modules.notification.service import NotificationService
 from app.modules.order.models import Order, OrderStatusHistory
 from app.modules.payment.models import IdempotencyKey, Payment
 from app.modules.payment.models import PaymentMethod as PaymentMethodModel
@@ -37,7 +40,14 @@ from app.modules.payment.schemas import (
     SavedPaymentMethodResponse,
 )
 from app.modules.payment.vnpay import build_vnpay_payment_url, verify_vnpay_signature
-from app.shared.enums import OrderStatus, PaymentMethod, PaymentStatus, Role
+from app.shared.enums import (
+    NotificationChannel,
+    NotificationType,
+    OrderStatus,
+    PaymentMethod,
+    PaymentStatus,
+    Role,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -625,6 +635,73 @@ class PaymentService:
             payload.get("vnp_TransactionStatus", "")
         ) in {"00", ""}
 
+    async def _resolve_merchant_owner_user_id(self, merchant_id: str) -> str | None:
+        result = await self.db.execute(
+            select(Merchant.user_id).where(
+                Merchant.id == merchant_id,
+                Merchant.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _notify_merchant_paid_order(
+        self,
+        *,
+        order: Order,
+        payment: Payment,
+    ) -> None:
+        merchant_user_id = await self._resolve_merchant_owner_user_id(order.merchant_id)
+        if not merchant_user_id:
+            logger.warning(
+                "payment.webhook.notify_merchant_skipped order_id=%s reason=merchant_owner_missing",
+                order.id,
+            )
+            return
+
+        service = NotificationService(self.db)
+        await service.send_notification(
+            NotificationCreate(
+                user_id=merchant_user_id,
+                type=NotificationType.PAYMENT,
+                channel=NotificationChannel.IN_APP,
+                title="New paid order",
+                body=f"Order {order.order_number} has been paid. Please accept or reject it.",
+                data={
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                    "status": order.status,
+                    "total": float(order.total),
+                    "payment_id": payment.id,
+                    "transaction_id": payment.transaction_id,
+                },
+            )
+        )
+
+    async def _notify_user_payment_confirmed(
+        self,
+        *,
+        order: Order,
+        payment: Payment,
+    ) -> None:
+        service = NotificationService(self.db)
+        await service.send_notification(
+            NotificationCreate(
+                user_id=order.user_id,
+                type=NotificationType.PAYMENT,
+                channel=NotificationChannel.IN_APP,
+                title="Payment successful",
+                body=f"Payment for order {order.order_number} was successful.",
+                data={
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                    "status": order.status,
+                    "total": float(order.total),
+                    "payment_id": payment.id,
+                    "transaction_id": payment.transaction_id,
+                },
+            )
+        )
+
     async def handle_webhook(
         self,
         gateway: str,
@@ -705,6 +782,7 @@ class PaymentService:
             if not order:
                 raise NotFoundError(message="Order not found for payment")
 
+            payment_just_completed = False
             if self._is_vnp_success(payload):
                 if PaymentStatus(payment.status) != PaymentStatus.COMPLETED:
                     payment.status = PaymentStatus.COMPLETED.value
@@ -712,6 +790,7 @@ class PaymentService:
                     payment.gateway_response = json.dumps(payload, sort_keys=True)
                     payment.error_code = None
                     payment.error_message = None
+                    payment_just_completed = True
 
                     current_order_status = OrderStatus(order.status)
                     if current_order_status == OrderStatus.PENDING:
@@ -745,6 +824,18 @@ class PaymentService:
                     payment.error_code = str(payload.get("vnp_ResponseCode") or "UNKNOWN")
                     payment.error_message = "Payment failed via VNPAY webhook"
                     payment.gateway_response = json.dumps(payload, sort_keys=True)
+
+            if payment_just_completed:
+                try:
+                    await self._notify_merchant_paid_order(order=order, payment=payment)
+                    await self._notify_user_payment_confirmed(order=order, payment=payment)
+                except Exception as notify_error:
+                    logger.warning(
+                        "payment.webhook.notify_failed trace_id=%s event_id=%s error=%s",
+                        trace_id,
+                        event_id,
+                        str(notify_error),
+                    )
 
             await self.repo.mark_webhook_processed(webhook_event)
             logger.info(

@@ -80,10 +80,12 @@ class ChatMessageData(BaseModel):
     """Chat message data."""
 
     message_id: str
+    order_id: str
     sender_id: str
     receiver_id: str
     content: str
     message_type: str = "text"
+    timestamp: str | None = None
 
 
 def get_order_room(order_id: str) -> str:

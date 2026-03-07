@@ -14,6 +14,7 @@ from app.modules.admin import router as admin_router
 
 # Import routers
 from app.modules.auth import router as auth_router
+from app.modules.chat import router as chat_router
 from app.modules.dispatch import router as dispatch_router
 from app.modules.driver import router as driver_router
 from app.modules.merchant import router as merchant_router
@@ -22,6 +23,7 @@ from app.modules.order import router as order_router
 from app.modules.payment import router as payment_router
 from app.modules.system import router as system_router
 from app.modules.user import router as user_router
+from app.realtime.router import router as realtime_router
 
 settings = get_settings()
 
@@ -107,8 +109,10 @@ app.include_router(auth_router, prefix=API_V1_PREFIX)
 app.include_router(user_router, prefix=API_V1_PREFIX)
 app.include_router(driver_router, prefix=API_V1_PREFIX)
 app.include_router(merchant_router, prefix=API_V1_PREFIX)
+app.include_router(chat_router, prefix=API_V1_PREFIX)
 app.include_router(order_router, prefix=API_V1_PREFIX)
 app.include_router(dispatch_router, prefix=API_V1_PREFIX)
 app.include_router(payment_router, prefix=API_V1_PREFIX)
 app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
+app.include_router(realtime_router, prefix=API_V1_PREFIX)
