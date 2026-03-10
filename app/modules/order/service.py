@@ -35,7 +35,14 @@ from app.modules.order.schemas import (
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
-from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
+from app.modules.voucher.models import Voucher
+from app.shared.enums import (
+    MerchantStatus,
+    OrderStatus,
+    PaymentStatus,
+    Role,
+    VoucherDiscountType,
+)
 
 
 class OrderService:
@@ -52,6 +59,89 @@ class OrderService:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         suffix = uuid4().hex[:6].upper()
         return f"ORD-{ts}-{suffix}"
+
+    @staticmethod
+    def _normalize_voucher_code(code: str | None) -> str | None:
+        if code is None:
+            return None
+        normalized = code.strip().upper()
+        return normalized or None
+
+    async def _count_active_voucher_usages(
+        self,
+        voucher_id: str,
+        *,
+        user_id: str | None = None,
+    ) -> int:
+        filters = [
+            Order.voucher_id == voucher_id,
+            Order.is_deleted == False,
+            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.REFUNDED.value]),
+        ]
+        if user_id:
+            filters.append(Order.user_id == user_id)
+
+        return (
+            await self.db.execute(
+                select(func.count(Order.id)).where(*filters)
+            )
+        ).scalar_one()
+
+    async def _resolve_voucher_for_order(
+        self,
+        *,
+        user_id: str,
+        merchant_id: str,
+        subtotal: float,
+        voucher_code: str | None,
+    ) -> tuple[Voucher | None, float]:
+        normalized_code = self._normalize_voucher_code(voucher_code)
+        if not normalized_code:
+            return None, 0.0
+
+        result = await self.db.execute(
+            select(Voucher).where(
+                Voucher.code == normalized_code,
+                Voucher.is_deleted == False,
+            )
+        )
+        voucher = result.scalar_one_or_none()
+        if not voucher:
+            raise ValidationError(message="Voucher not found")
+
+        if not voucher.is_active:
+            raise ValidationError(message="Voucher is inactive")
+
+        now = datetime.now(timezone.utc)
+        if voucher.starts_at and voucher.starts_at > now:
+            raise ValidationError(message="Voucher is not active yet")
+        if voucher.expires_at and voucher.expires_at < now:
+            raise ValidationError(message="Voucher has expired")
+        if voucher.merchant_id and voucher.merchant_id != merchant_id:
+            raise ValidationError(message="Voucher is not applicable for this merchant")
+        if subtotal < float(voucher.min_order_amount):
+            raise ValidationError(
+                message=f"Voucher requires minimum order value of {float(voucher.min_order_amount):.2f}"
+            )
+
+        total_usage = await self._count_active_voucher_usages(voucher.id)
+        if voucher.usage_limit is not None and total_usage >= voucher.usage_limit:
+            raise ValidationError(message="Voucher usage limit reached")
+
+        user_usage = await self._count_active_voucher_usages(voucher.id, user_id=user_id)
+        if voucher.per_user_limit is not None and user_usage >= voucher.per_user_limit:
+            raise ValidationError(message="Voucher usage limit reached for this user")
+
+        if voucher.discount_type == VoucherDiscountType.PERCENTAGE.value:
+            discount = subtotal * (float(voucher.discount_value) / 100.0)
+        else:
+            discount = float(voucher.discount_value)
+
+        if voucher.max_discount_amount is not None:
+            discount = min(discount, float(voucher.max_discount_amount))
+
+        discount = min(discount, subtotal)
+        return voucher, discount
 
     async def _validate_and_snapshot_options(
         self,
@@ -240,6 +330,7 @@ class OrderService:
             user_id=order.user_id,
             merchant_id=order.merchant_id,
             driver_id=order.driver_id,
+            voucher_code=order.voucher_code,
             status=OrderStatus(order.status),
             subtotal=float(order.subtotal),
             delivery_fee=float(order.delivery_fee),
@@ -350,15 +441,23 @@ class OrderService:
             subtotal += line_subtotal
             pending_items.append((requested_item, menu_item, option_snapshot, unit_price))
 
+        voucher, discount = await self._resolve_voucher_for_order(
+            user_id=user_id,
+            merchant_id=data.merchant_id,
+            subtotal=subtotal,
+            voucher_code=data.voucher_code,
+        )
+
         delivery_fee = float(merchant.delivery_fee or 0.0)
         tax = 0.0
-        discount = 0.0
         total = subtotal + delivery_fee + tax - discount
 
         order = Order(
             order_number=self._generate_order_number(),
             user_id=user_id,
             merchant_id=data.merchant_id,
+            voucher_id=voucher.id if voucher else None,
+            voucher_code=voucher.code if voucher else None,
             status=OrderStatus.PENDING.value,
             subtotal=subtotal,
             delivery_fee=delivery_fee,
@@ -372,6 +471,9 @@ class OrderService:
         )
         self.db.add(order)
         await self.db.flush()
+
+        if voucher:
+            voucher.usage_count = await self._count_active_voucher_usages(voucher.id)
 
         order_items: list[OrderItem] = []
         for requested_item, menu_item, option_snapshot, unit_price in pending_items:
@@ -641,6 +743,17 @@ class OrderService:
             raise ValidationError(message=f"Order cannot be cancelled from {current_status.value}")
 
         order.status = OrderStatus.CANCELLED.value
+        if order.voucher_id:
+            voucher = (
+                await self.db.execute(
+                    select(Voucher).where(
+                        Voucher.id == order.voucher_id,
+                        Voucher.is_deleted == False,
+                    )
+                )
+            ).scalar_one_or_none()
+            if voucher and voucher.usage_count > 0:
+                voucher.usage_count -= 1
         self.db.add(
             OrderStatusHistory(
                 order_id=order.id,

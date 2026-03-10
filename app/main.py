@@ -22,6 +22,7 @@ from app.modules.order import router as order_router
 from app.modules.payment import router as payment_router
 from app.modules.system import router as system_router
 from app.modules.user import router as user_router
+from app.modules.voucher import router as voucher_router
 
 settings = get_settings()
 
@@ -112,3 +113,4 @@ app.include_router(dispatch_router, prefix=API_V1_PREFIX)
 app.include_router(payment_router, prefix=API_V1_PREFIX)
 app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
+app.include_router(voucher_router, prefix=API_V1_PREFIX)
