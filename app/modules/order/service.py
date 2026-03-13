@@ -55,6 +55,21 @@ class OrderService:
         self.db = db
 
     @staticmethod
+    def _to_utc_aware(dt: datetime | None) -> datetime | None:
+        """
+        Ensure a datetime is timezone-aware in UTC.
+
+        SQLite can return naive datetimes even when `timezone=True` is set on
+        SQLAlchemy columns, which then breaks comparisons against
+        `datetime.now(timezone.utc)`.
+        """
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
+    @staticmethod
     def _generate_order_number() -> str:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         suffix = uuid4().hex[:6].upper()
@@ -113,9 +128,11 @@ class OrderService:
             raise ValidationError(message="Voucher is inactive")
 
         now = datetime.now(timezone.utc)
-        if voucher.starts_at and voucher.starts_at > now:
+        starts_at = self._to_utc_aware(voucher.starts_at)
+        expires_at = self._to_utc_aware(voucher.expires_at)
+        if starts_at and starts_at > now:
             raise ValidationError(message="Voucher is not active yet")
-        if voucher.expires_at and voucher.expires_at < now:
+        if expires_at and expires_at < now:
             raise ValidationError(message="Voucher has expired")
         if voucher.merchant_id and voucher.merchant_id != merchant_id:
             raise ValidationError(message="Voucher is not applicable for this merchant")
