@@ -44,18 +44,6 @@ class Order(BaseModel):
         index=True,
     )
 
-    voucher_id: Mapped[str | None] = mapped_column(
-        String(36),
-        nullable=True,
-        index=True,
-    )
-
-    voucher_code: Mapped[str | None] = mapped_column(
-        String(50),
-        nullable=True,
-        index=True,
-    )
-
     # Status
     status: Mapped[str] = mapped_column(
         String(20),

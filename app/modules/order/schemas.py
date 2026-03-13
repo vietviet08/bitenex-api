@@ -23,7 +23,7 @@ class OrderItemCreate(BaseDTO):
     menu_item_id: str
     quantity: int = Field(ge=1)
     notes: str | None = None
-    selected_options: list[SelectedOptionInput] = Field(default_factory=list)
+    selected_options: list[SelectedOptionInput] = []
 
 
 class OrderItemResponse(BaseDTO):
@@ -48,7 +48,6 @@ class OrderCreate(BaseDTO):
     delivery_latitude: float | None = None
     delivery_longitude: float | None = None
     customer_note: str | None = None
-    voucher_code: str | None = None
 
 
 class OrderUpdate(BaseDTO):
@@ -72,7 +71,6 @@ class OrderResponse(BaseDTO, TimestampMixin):
     user_id: str
     merchant_id: str
     driver_id: str | None = None
-    voucher_code: str | None = None
     status: OrderStatus
     subtotal: float
     delivery_fee: float
@@ -85,7 +83,7 @@ class OrderResponse(BaseDTO, TimestampMixin):
     customer_note: str | None = None
     estimated_prep_time: int | None = None
     estimated_delivery_time: int | None = None
-    items: list[OrderItemResponse] = Field(default_factory=list)
+    items: list[OrderItemResponse] = []
 
 
 class AdminOrderListItem(BaseDTO, TimestampMixin):
@@ -96,7 +94,6 @@ class AdminOrderListItem(BaseDTO, TimestampMixin):
     user_id: str
     merchant_id: str
     driver_id: str | None = None
-    voucher_code: str | None = None
     status: OrderStatus
     subtotal: float
     delivery_fee: float

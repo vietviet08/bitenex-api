@@ -56,15 +56,6 @@ class PaymentMethod(str, Enum):
     BANK_TRANSFER = "BANK_TRANSFER"
 
 
-class VoucherDiscountType(str, Enum):
-    """
-    Supported voucher discount calculation types.
-    """
-
-    PERCENTAGE = "PERCENTAGE"
-    FIXED_AMOUNT = "FIXED_AMOUNT"
-
-
 class DriverStatus(str, Enum):
     """
     Driver availability status.

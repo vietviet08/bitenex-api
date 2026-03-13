@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -10,7 +9,6 @@ from app.modules.driver.models import Driver
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.order.models import Order, OrderStatusHistory
 from app.modules.payment.models import Payment, Refund
-from app.modules.voucher.models import Voucher
 from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
 
 
@@ -105,88 +103,6 @@ async def test_create_order_atomic_and_invalid_item_rejected(client: AsyncClient
         )
     ).scalar_one()
     assert total_orders == 1
-
-
-@pytest.mark.asyncio
-async def test_create_order_applies_voucher_and_enforces_per_user_limit(
-    client: AsyncClient, db_session
-):
-    merchant = Merchant(
-        user_id="merchant-owner-voucher-order",
-        name="Voucher Order Merchant",
-        slug=f"voucher-order-{uuid4().hex[:8]}",
-        address="9 Merchant St",
-        city="HCM",
-        status=MerchantStatus.ACTIVE.value,
-        delivery_fee=10.0,
-    )
-    db_session.add(merchant)
-    await db_session.flush()
-
-    menu_item = MenuItem(
-        merchant_id=merchant.id,
-        name="Com Tam",
-        price=100.0,
-        is_available=True,
-    )
-    voucher = Voucher(
-        code="SAVE10",
-        merchant_id=merchant.id,
-        discount_type="PERCENTAGE",
-        discount_value=10.0,
-        min_order_amount=50.0,
-        per_user_limit=1,
-        usage_limit=10,
-        starts_at=datetime.now(timezone.utc) - timedelta(days=1),
-        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
-        is_active=True,
-    )
-    db_session.add_all([menu_item, voucher])
-    await db_session.flush()
-
-    user_id = "user-order-voucher"
-    response = await client.post(
-        "/api/v1/orders",
-        json={
-            "merchant_id": merchant.id,
-            "delivery_address": "123 Voucher St",
-            "voucher_code": "save10",
-            "items": [
-                {
-                    "menu_item_id": menu_item.id,
-                    "quantity": 2,
-                }
-            ],
-        },
-        headers=_auth_header(user_id, Role.USER),
-    )
-    assert response.status_code == 201
-    payload = response.json()
-    assert payload["voucher_code"] == "SAVE10"
-    assert payload["subtotal"] == 200.0
-    assert payload["discount"] == 20.0
-    assert payload["total"] == 190.0
-
-    await db_session.refresh(voucher)
-    assert voucher.usage_count == 1
-
-    second_response = await client.post(
-        "/api/v1/orders",
-        json={
-            "merchant_id": merchant.id,
-            "delivery_address": "123 Voucher St",
-            "voucher_code": "SAVE10",
-            "items": [
-                {
-                    "menu_item_id": menu_item.id,
-                    "quantity": 1,
-                }
-            ],
-        },
-        headers=_auth_header(user_id, Role.USER),
-    )
-    assert second_response.status_code == 400
-    assert second_response.json()["error"]["message"] == "Voucher usage limit reached for this user"
 
 
 @pytest.mark.asyncio
