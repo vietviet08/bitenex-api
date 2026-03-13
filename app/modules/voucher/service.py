@@ -28,6 +28,21 @@ class VoucherService:
         self.db = db
 
     @staticmethod
+    def _to_utc_aware(dt: datetime | None) -> datetime | None:
+        """
+        Ensure a datetime is timezone-aware in UTC.
+
+        SQLite (used in tests) can return naive datetimes even when `timezone=True`
+        is set on the SQLAlchemy column, which then breaks comparisons against
+        timezone-aware `datetime.now(timezone.utc)`.
+        """
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
+    @staticmethod
     def _normalize_code(code: str) -> str:
         return code.strip().upper()
 
@@ -90,11 +105,20 @@ class VoucherService:
         if existing:
             raise DuplicateError(message="Voucher code already exists")
 
+        # `BaseDTO` is configured with `use_enum_values=True`, so `discount_type`
+        # may already be a plain string instead of a `VoucherDiscountType` enum.
+        # Normalise to the enum *value* while supporting both representations.
+        discount_type_value = (
+            data.discount_type.value
+            if hasattr(data.discount_type, "value")
+            else data.discount_type
+        )
+
         voucher = Voucher(
             code=self._normalize_code(data.code),
             description=data.description,
             merchant_id=data.merchant_id,
-            discount_type=data.discount_type.value,
+            discount_type=discount_type_value,
             discount_value=data.discount_value,
             max_discount_amount=data.max_discount_amount,
             min_order_amount=data.min_order_amount,
@@ -113,7 +137,10 @@ class VoucherService:
         voucher = await self._get_voucher_model(voucher_id)
         payload = data.model_dump(exclude_unset=True)
         if "discount_type" in payload and payload["discount_type"] is not None:
-            payload["discount_type"] = payload["discount_type"].value
+            discount_type = payload["discount_type"]
+            payload["discount_type"] = (
+                discount_type.value if hasattr(discount_type, "value") else discount_type
+            )
 
         for field, value in payload.items():
             setattr(voucher, field, value)
@@ -171,11 +198,13 @@ class VoucherService:
             )
 
         now = datetime.now(timezone.utc)
+        starts_at = self._to_utc_aware(voucher.starts_at)
+        expires_at = self._to_utc_aware(voucher.expires_at)
         if not voucher.is_active:
             raise ValidationError(message="Voucher is inactive")
-        if voucher.starts_at and voucher.starts_at > now:
+        if starts_at and starts_at > now:
             raise ValidationError(message="Voucher is not active yet")
-        if voucher.expires_at and voucher.expires_at < now:
+        if expires_at and expires_at < now:
             raise ValidationError(message="Voucher has expired")
         if voucher.merchant_id and voucher.merchant_id != data.merchant_id:
             raise ValidationError(message="Voucher is not applicable for this merchant")
