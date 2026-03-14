@@ -79,7 +79,6 @@ lint:
 	docker compose exec api ruff check app
 
 format:
-	docker compose exec api black app
 	docker compose exec api ruff check --fix app
 
 prod-up:
