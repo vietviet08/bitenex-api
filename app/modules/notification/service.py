@@ -2,10 +2,14 @@
 # Notification Module - Service Layer
 # =============================================================================
 
+import json
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError
+from app.modules.notification.models import DeviceToken, Notification, NotificationPreference
 from app.modules.notification.schemas import (
     DeviceTokenCreate,
     DeviceTokenResponse,
@@ -14,6 +18,8 @@ from app.modules.notification.schemas import (
     NotificationPreferenceUpdate,
     NotificationResponse,
 )
+from app.modules.user.models import User
+from app.shared.enums import NotificationChannel
 from app.shared.enums import NotificationType
 
 
@@ -25,6 +31,13 @@ class NotificationService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _normalize_notification_type(notification_type: NotificationType | str) -> str:
+        """Support both enum instances and Pydantic-coerced enum values."""
+        if isinstance(notification_type, NotificationType):
+            return notification_type.value
+        return str(notification_type)
 
     async def send_notification(
         self,
@@ -140,12 +153,44 @@ class NotificationService:
         self,
         title: str,
         body: str,
-        notification_type: NotificationType,
+        notification_type: NotificationType | str,
         user_ids: list[str] | None = None,
+        data: dict[str, Any] | None = None,
     ) -> int:
         """
         Broadcast notification to multiple users.
         Returns count of notifications queued.
         """
-        # TODO: Implement
-        raise NotImplementedError()
+        if user_ids:
+            resolved_user_ids = user_ids
+        else:
+            result = await self.db.execute(
+                select(User.id).where(
+                    User.is_deleted.is_(False),
+                    User.is_active.is_(True),
+                )
+            )
+            resolved_user_ids = list(result.scalars().all())
+
+        if not resolved_user_ids:
+            return 0
+
+        payload = json.dumps(data, sort_keys=True) if data else None
+        notification_type_value = self._normalize_notification_type(notification_type)
+        notifications = [
+            Notification(
+                user_id=user_id,
+                type=notification_type_value,
+                channel=NotificationChannel.PUSH.value,
+                title=title,
+                body=body,
+                data=payload,
+                is_read=False,
+                is_sent=True,
+                error_message=None,
+            )
+            for user_id in resolved_user_ids
+        ]
+        self.db.add_all(notifications)
+        await self.db.flush()
+        return len(notifications)

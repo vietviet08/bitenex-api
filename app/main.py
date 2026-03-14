@@ -16,12 +16,15 @@ from app.modules.admin import router as admin_router
 from app.modules.auth import router as auth_router
 from app.modules.dispatch import router as dispatch_router
 from app.modules.driver import router as driver_router
+from app.modules.journey import public_router as journey_public_router
+from app.modules.journey import router as journey_router
 from app.modules.merchant import router as merchant_router
 from app.modules.notification import router as notification_router
 from app.modules.order import router as order_router
 from app.modules.payment import router as payment_router
 from app.modules.system import router as system_router
 from app.modules.user import router as user_router
+from app.workers import abandoned_cart_worker
 
 settings = get_settings()
 
@@ -45,7 +48,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(colorama.Fore.MAGENTA + ascii_banner)
 
     # TODO: Initialize Redis connection
-    # TODO: Start background workers
+    if settings.app_env != "test":
+        await abandoned_cart_worker.start()
     # TODO: Run any startup checks
 
     yield
@@ -54,10 +58,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Shutting down Bitenex API...")
 
     # Close database connections
+    if settings.app_env != "test":
+        await abandoned_cart_worker.stop()
     await engine.dispose()
 
     # TODO: Close Redis connection
-    # TODO: Stop background workers
 
     logger.info("Shutdown complete")
 
@@ -111,4 +116,6 @@ app.include_router(order_router, prefix=API_V1_PREFIX)
 app.include_router(dispatch_router, prefix=API_V1_PREFIX)
 app.include_router(payment_router, prefix=API_V1_PREFIX)
 app.include_router(notification_router, prefix=API_V1_PREFIX)
+app.include_router(journey_public_router, prefix=API_V1_PREFIX)
+app.include_router(journey_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
