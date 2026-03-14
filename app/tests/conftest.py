@@ -18,6 +18,10 @@ os.environ.setdefault("VNP_HASH_SECRET", "TESTHASHSECRET")
 os.environ.setdefault("VNP_URL", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html")
 os.environ.setdefault("VNP_RETURN_URL", "bitenexuser://payment/result")
 os.environ.setdefault("VNP_IPN_URL", "https://example.com/api/v1/payments/vnpay/ipn")
+os.environ["APP_ENV"] = "test"
+os.environ["DEBUG"] = "true"
+os.environ.setdefault("INTERNAL_API_TOKEN", "TEST_INTERNAL_TOKEN")
+os.environ.setdefault("ABANDONED_CART_N8N_WEBHOOK_URL", "https://example.com/webhook/cart-abandoned")
 
 from app.core.database import Base, get_db
 from app.core.security import create_access_token

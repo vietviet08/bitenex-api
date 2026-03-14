@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, RequireAdmin
+from app.core.dependencies import CurrentUser, RequireAdminOrInternal
 from app.modules.notification.schemas import (
     BroadcastNotification,
     DeviceTokenCreate,
@@ -151,7 +151,7 @@ async def update_preferences(
     "/broadcast",
     response_model=MessageResponse,
     summary="Broadcast notification",
-    dependencies=[RequireAdmin],
+    dependencies=[RequireAdminOrInternal],
 )
 async def broadcast(
     data: BroadcastNotification,
@@ -163,5 +163,6 @@ async def broadcast(
         data.body,
         data.type,
         data.user_ids,
+        data.data,
     )
     return MessageResponse(message=f"Notification queued for {count} users")

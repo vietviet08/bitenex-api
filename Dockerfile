@@ -65,7 +65,6 @@ USER root
 # Install development dependencies
 RUN pip install --no-cache-dir \
     pytest-cov \
-    black \
     ruff \
     ipython
 

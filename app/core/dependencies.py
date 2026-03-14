@@ -3,11 +3,13 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError, InsufficientRoleError
 from app.core.security import verify_access_token
 from app.shared.enums import Role
 
 security = HTTPBearer(auto_error=False)
+settings = get_settings()
 
 
 class TokenPayload:
@@ -58,6 +60,29 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[TokenPayload, Depends(get_current_user)]
+
+
+class InternalServicePrincipal:
+    """Represents a trusted internal caller or admin principal."""
+
+    def __init__(
+        self,
+        *,
+        source: str,
+        user_id: str | None = None,
+        role: Role | None = None,
+    ):
+        self.source = source
+        self.user_id = user_id
+        self.role = role
+
+    @property
+    def is_internal(self) -> bool:
+        return self.source == "internal"
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == Role.ADMIN
 
 
 class RoleChecker:
@@ -119,6 +144,48 @@ RequireAdmin = Depends(require_role(Role.ADMIN))
 RequireMerchant = Depends(require_role(Role.MERCHANT, Role.ADMIN))
 RequireDriver = Depends(require_role(Role.DRIVER, Role.ADMIN))
 RequireUser = Depends(require_role(Role.USER, Role.ADMIN))
+
+
+async def get_internal_service(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
+) -> InternalServicePrincipal:
+    """
+    Authenticate an internal service request.
+
+    Accepts either:
+    - A shared internal bearer token
+    - A valid admin JWT
+    """
+    if not credentials:
+        raise AuthenticationError("Missing authentication token")
+
+    token = credentials.credentials
+    if token == settings.internal_api_token:
+        return InternalServicePrincipal(source="internal")
+
+    payload = verify_access_token(token)
+    user_id = payload.get("sub")
+    role = payload.get("role")
+
+    if not user_id or not role:
+        raise AuthenticationError("Invalid token payload")
+
+    normalized_role = Role(role)
+    if normalized_role != Role.ADMIN:
+        raise InsufficientRoleError(
+            message="Internal endpoints require an internal token or admin access",
+            details={"current_role": normalized_role.value},
+        )
+
+    return InternalServicePrincipal(
+        source="admin",
+        user_id=user_id,
+        role=normalized_role,
+    )
+
+
+RequireInternalService = Depends(get_internal_service)
+RequireAdminOrInternal = Depends(get_internal_service)
 
 
 async def get_current_user_optional(

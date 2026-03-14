@@ -400,6 +400,9 @@ class OrderService:
         )
 
         await self.db.flush()
+        from app.modules.journey.service import JourneyService
+
+        await JourneyService(self.db).mark_cart_checked_out_for_order(order)
         await self.db.refresh(order)
         return self._to_order_response(order, order_items)
 
