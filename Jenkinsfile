@@ -30,9 +30,14 @@ pipeline {
         stage('Resolve Branch') {
             steps {
                 script {
+                    def normalize = { String v ->
+                        if (!v) return ''
+                        return v.replaceFirst(/^origin\//, '').trim()
+                    }
+
                     def selected = params.BRANCH_SOURCE?.trim()
-                    def fromPrTarget = env.CHANGE_TARGET?.trim()
-                    def fromBranchName = env.BRANCH_NAME?.trim()
+                    def fromPrTarget = normalize(env.CHANGE_TARGET)
+                    def fromBranchName = normalize(env.BRANCH_NAME)
 
                     if (selected && selected != 'auto') {
                         env.DEPLOY_BRANCH = selected
@@ -44,6 +49,10 @@ pipeline {
                         env.DEPLOY_BRANCH = 'develop'
                     }
 
+                    if (!env.DEPLOY_BRANCH?.trim()) {
+                        env.DEPLOY_BRANCH = 'develop'
+                    }
+
                     echo "Resolved deploy branch: ${env.DEPLOY_BRANCH}"
                 }
             }
@@ -51,17 +60,45 @@ pipeline {
 
         stage('Deploy API on EC2') {
             steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: params.SSH_CREDENTIALS_ID,
-                        keyFileVariable: 'SSH_KEY_FILE',
-                        usernameVariable: 'SSH_USERNAME'
-                    )
-                ]) {
-                    sh '''#!/usr/bin/env bash
+                script {
+                    def ec2Host = params.EC2_HOST?.trim()
+                    def ec2User = params.EC2_USER?.trim() ?: 'ubuntu'
+                    def ec2Port = params.EC2_PORT?.trim() ?: '22'
+                    def remoteBaseDir = params.REMOTE_BASE_DIR?.trim() ?: '/home/ubuntu/apps'
+                    def apiSubdir = params.API_SUBDIR?.trim() ?: 'bitenex-api'
+                    def repoUrl = params.REPO_URL?.trim()
+                    def deployBranch = env.DEPLOY_BRANCH?.trim() ?: 'develop'
+
+                    if (!ec2Host) {
+                        error('EC2_HOST is required')
+                    }
+                    if (!repoUrl) {
+                        error('REPO_URL is required')
+                    }
+
+                    withCredentials([
+                        sshUserPrivateKey(
+                            credentialsId: params.SSH_CREDENTIALS_ID,
+                            keyFileVariable: 'SSH_KEY_FILE',
+                            usernameVariable: 'SSH_USERNAME'
+                        )
+                    ]) {
+                        withEnv([
+                            "EC2_HOST=${ec2Host}",
+                            "EC2_USER=${ec2User}",
+                            "EC2_PORT=${ec2Port}",
+                            "REMOTE_BASE_DIR=${remoteBaseDir}",
+                            "API_SUBDIR=${apiSubdir}",
+                            "REPO_URL=${repoUrl}",
+                            "DEPLOY_BRANCH=${deployBranch}"
+                        ]) {
+                            sh '''#!/usr/bin/env bash
 set -euo pipefail
 
-REMOTE_USER="${EC2_USER:-$SSH_USERNAME}"
+REMOTE_USER="$EC2_USER"
+if [ -z "$REMOTE_USER" ]; then
+  REMOTE_USER="$SSH_USERNAME"
+fi
 SSH_OPTS="-i $SSH_KEY_FILE -p ${EC2_PORT} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
 
 ssh $SSH_OPTS "$REMOTE_USER@$EC2_HOST" \
@@ -127,6 +164,8 @@ echo "[docker] Current API container status"
 docker compose -f docker-compose.yml ps api
 REMOTE_EOF
 '''
+                        }
+                    }
                 }
             }
         }
