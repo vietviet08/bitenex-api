@@ -38,22 +38,23 @@ pipeline {
                     def selected = params.BRANCH_SOURCE?.trim()
                     def fromPrTarget = normalize(env.CHANGE_TARGET)
                     def fromBranchName = normalize(env.BRANCH_NAME)
+                    def resolvedBranch = 'develop'
 
                     if (selected && selected != 'auto') {
-                        env.DEPLOY_BRANCH = selected
+                        resolvedBranch = selected
                     } else if (fromPrTarget in ['develop', 'master', 'main']) {
-                        env.DEPLOY_BRANCH = fromPrTarget
+                        resolvedBranch = fromPrTarget
                     } else if (fromBranchName in ['develop', 'master', 'main']) {
-                        env.DEPLOY_BRANCH = fromBranchName
-                    } else {
-                        env.DEPLOY_BRANCH = 'develop'
+                        resolvedBranch = fromBranchName
                     }
 
-                    if (!env.DEPLOY_BRANCH?.trim()) {
-                        env.DEPLOY_BRANCH = 'develop'
+                    if (!(resolvedBranch in ['develop', 'master', 'main'])) {
+                        resolvedBranch = 'develop'
                     }
 
-                    echo "Resolved deploy branch: ${env.DEPLOY_BRANCH}"
+                    env.DEPLOY_BRANCH = resolvedBranch
+
+                    echo "Resolved deploy branch: ${resolvedBranch}"
                 }
             }
         }
@@ -61,13 +62,35 @@ pipeline {
         stage('Deploy API on EC2') {
             steps {
                 script {
+                    def normalize = { String v ->
+                        if (!v) return ''
+                        return v.replaceFirst(/^origin\//, '').trim()
+                    }
+
                     def ec2Host = params.EC2_HOST?.trim()
                     def ec2User = params.EC2_USER?.trim() ?: 'ubuntu'
                     def ec2Port = params.EC2_PORT?.trim() ?: '22'
                     def remoteBaseDir = params.REMOTE_BASE_DIR?.trim() ?: '/home/ubuntu/apps'
                     def apiSubdir = params.API_SUBDIR?.trim() ?: 'bitenex-api'
                     def repoUrl = params.REPO_URL?.trim()
-                    def deployBranch = env.DEPLOY_BRANCH?.trim() ?: 'develop'
+                    def selected = params.BRANCH_SOURCE?.trim()
+                    def deployBranch = 'develop'
+
+                    if (selected && selected != 'auto') {
+                        deployBranch = selected
+                    } else {
+                        def fromPrTarget = normalize(env.CHANGE_TARGET)
+                        def fromBranchName = normalize(env.BRANCH_NAME)
+                        if (fromPrTarget in ['develop', 'master', 'main']) {
+                            deployBranch = fromPrTarget
+                        } else if (fromBranchName in ['develop', 'master', 'main']) {
+                            deployBranch = fromBranchName
+                        }
+                    }
+
+                    if (!(deployBranch in ['develop', 'master', 'main'])) {
+                        deployBranch = 'develop'
+                    }
 
                     if (!ec2Host) {
                         error('EC2_HOST is required')
@@ -142,17 +165,23 @@ else
 fi
 
 echo "[test] Run pytest"
-if command -v pytest >/dev/null 2>&1; then
-  pytest
-else
-  if [ -f requirements.txt ]; then
-    python3 -m pip install -r requirements.txt
-    pytest
-  else
-    echo "[error] requirements.txt not found and pytest unavailable"
+if [ ! -f requirements.txt ]; then
+    echo "[error] requirements.txt not found"
     exit 1
-  fi
 fi
+
+if ! python3 -m venv .venv-ci >/dev/null 2>&1; then
+    echo "[test] python3-venv missing, trying to install"
+    sudo apt-get update
+    sudo apt-get install -y python3-venv
+    python3 -m venv .venv-ci
+fi
+
+. .venv-ci/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pip install pytest
+pytest
 
 echo "[docker] Build API image"
 docker compose -f docker-compose.yml build api
