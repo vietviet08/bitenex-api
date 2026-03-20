@@ -84,6 +84,7 @@ services:
             GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
             TZ: Asia/Ho_Chi_Minh
             N8N_LOG_LEVEL: info
+            N8N_SECURE_COOKIE: false
         volumes:
             - n8n_data:/home/node/.n8n
         restart: unless-stopped
