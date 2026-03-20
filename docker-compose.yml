@@ -1,110 +1,104 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
-    container_name: bitenex-api
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - APP_NAME=Bitenex API
-      - APP_ENV=development
-      - DEBUG=true
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/bitenex
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-change-in-production}
-      - JWT_ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - REFRESH_TOKEN_EXPIRE_DAYS=7
-      - CORS_ORIGINS=["http://localhost:3000","http://localhost:8080"]
-    volumes:
-      - .:/app
-      - /app/__pycache__
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - bitenex-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: development
+        container_name: bitenex-api
+        restart: unless-stopped
+        ports:
+            - "8000:8000"
+        env_file:
+            - .env
+        volumes:
+            - .:/app
+            - /app/__pycache__
+        depends_on:
+            db:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        networks:
+            - bitenex-network
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
 
-  db:
-    image: postgres:16-alpine
-    container_name: bitenex-db
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=bitenex
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-    networks:
-      - bitenex-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d bitenex"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+    db:
+        image: postgres:16-alpine
+        container_name: bitenex-db
+        restart: unless-stopped
+        ports:
+            - "5432:5432"
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+            - POSTGRES_DB=bitenex
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+        networks:
+            - bitenex-network
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres -d bitenex"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
 
-  redis:
-    image: redis:7-alpine
-    container_name: bitenex-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    networks:
-      - bitenex-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
+    redis:
+        image: redis:7-alpine
+        container_name: bitenex-redis
+        restart: unless-stopped
+        ports:
+            - "6379:6379"
+        command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+        volumes:
+            - redis_data:/data
+        networks:
+            - bitenex-network
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 5s
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: bitenex-pgadmin
-    restart: unless-stopped
-    ports:
-      - "5050:80"
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@bitenex.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-      - PGADMIN_CONFIG_SERVER_MODE=False
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      - db
-    networks:
-      - bitenex-network
-    profiles:
-      - dev-tools
+    n8n:
+        image: n8nio/n8n:latest
+        container_name: n8n
+        ports:
+            - "5678:5678"
+        environment:
+            N8N_BASIC_AUTH_ACTIVE: true
+            N8N_BASIC_AUTH_USER: admin
+            N8N_BASIC_AUTH_PASSWORD: admin
+            # N8N_HOST: ${N8N_HOST}
+            # N8N_PORT: 5678
+            # N8N_PROTOCOL: ${N8N_PROTOCOL}
+            # N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+            # WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+            GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
+            TZ: Asia/Ho_Chi_Minh
+            N8N_LOG_LEVEL: info
+        volumes:
+            - n8n_data:/home/node/.n8n
+        restart: unless-stopped
 
 networks:
-  bitenex-network:
-    driver: bridge
-    name: bitenex-network
+    bitenex-network:
+        driver: bridge
+        name: bitenex-network
 
 volumes:
-  postgres_data:
-    name: bitenex-postgres-data
-  redis_data:
-    name: bitenex-redis-data
-  pgadmin_data:
-    name: bitenex-pgadmin-data
+    postgres_data:
+        name: bitenex-postgres-data
+    redis_data:
+        name: bitenex-redis-data
+    pgadmin_data:
+        name: bitenex-pgadmin-data
+    n8n_data:
+        name: bitenex-n8n-data
