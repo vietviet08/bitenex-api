@@ -5,7 +5,6 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
-        ansiColor('xterm')
     }
 
     parameters {
@@ -119,13 +118,13 @@ else
 fi
 
 echo "[docker] Build API image"
-docker compose -f docker compose.yml build api
+docker compose -f docker-compose.yml build api
 
 echo "[docker] Deploy API container"
-docker compose -f docker compose.yml up -d api
+docker compose -f docker-compose.yml up -d api
 
 echo "[docker] Current API container status"
-docker compose -f docker compose.yml ps api
+docker compose -f docker-compose.yml ps api
 REMOTE_EOF
 '''
                 }
