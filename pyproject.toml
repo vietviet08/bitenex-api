@@ -24,3 +24,16 @@ target-version = "py311"
 
 [tool.pylint.MESSAGES_CONTROL]
 disable = ["E1102"]
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["app"]
+omit = [
+    "app/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true

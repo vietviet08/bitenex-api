@@ -27,6 +27,7 @@ wheels/
 # Virtual environments
 venv/
 .venv/
+.venv-ci/
 ENV/
 env/
 
@@ -45,9 +46,12 @@ env/
 
 # Testing
 .coverage
+coverage.xml
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+.scannerwork/
+.sonar/
 
 # Logs
 *.log
