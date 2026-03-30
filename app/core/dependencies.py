@@ -1,6 +1,8 @@
+import hashlib
+import hmac
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
@@ -10,6 +12,39 @@ from app.shared.enums import Role
 
 security = HTTPBearer(auto_error=False)
 settings = get_settings()
+
+
+async def verify_n8n_hmac_signature(
+    request: Request,
+    x_bitenex_signature: Annotated[str | None, Header(alias="X-Bitenex-Signature")] = None,
+) -> None:
+    """
+    Validate HMAC-SHA256 signature for n8n → Bitenex webhook calls.
+
+    n8n must send header:
+        X-Bitenex-Signature: sha256=<hex_digest>
+
+    The digest is HMAC-SHA256(body_bytes, N8N_WEBHOOK_SECRET).
+    """
+    if not settings.n8n_webhook_enabled:
+        return
+
+    if not x_bitenex_signature:
+        raise AuthenticationError("Missing X-Bitenex-Signature header")
+
+    if not x_bitenex_signature.startswith("sha256="):
+        raise AuthenticationError("Invalid signature format — expected 'sha256=<hex>'")
+
+    body = await request.body()
+    secret = settings.n8n_webhook_secret.encode()
+    expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+    received = x_bitenex_signature.removeprefix("sha256=")
+
+    if not hmac.compare_digest(expected, received):
+        raise AuthenticationError("Invalid webhook signature")
+
+
+RequireN8nSignature = Depends(verify_n8n_hmac_signature)
 
 
 class TokenPayload:

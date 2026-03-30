@@ -163,3 +163,35 @@ class IdempotencyKey(BaseModel):
     request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     response_status: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
     response_payload: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class WebhookEvent(BaseModel):
+    """
+    Deduplication ledger for all inbound webhooks (n8n, payment gateways, etc.).
+
+    Mapped to the `webhook_events` table created by migration b7c8d9e0f1a2.
+
+    Usage:
+        event = WebhookEvent(
+            gateway="n8n",
+            event_id="order-delivered-ord_xyz-1711700000",
+            event_type="order.delivered",
+            payload='{"orderId": "ord_xyz"}',
+        )
+    """
+
+    __tablename__ = "webhook_events"
+    __table_args__ = (
+        UniqueConstraint("gateway", "event_id", name="uq_webhook_gateway_event"),
+        {"extend_existing": True, "keep_existing": False},
+    )
+
+    gateway: Mapped[str] = mapped_column(String(50), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="RECEIVED")
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
