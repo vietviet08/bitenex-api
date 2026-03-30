@@ -22,6 +22,7 @@ os.environ["APP_ENV"] = "test"
 os.environ["DEBUG"] = "true"
 os.environ.setdefault("INTERNAL_API_TOKEN", "TEST_INTERNAL_TOKEN")
 os.environ.setdefault("ABANDONED_CART_N8N_WEBHOOK_URL", "https://example.com/webhook/cart-abandoned")
+os.environ.setdefault("N8N_WEBHOOK_SECRET", "test-n8n-secret")
 
 from app.core.database import Base, get_db
 from app.core.security import create_access_token

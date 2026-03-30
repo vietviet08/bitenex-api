@@ -121,3 +121,22 @@ class JourneyOfferResponse(BaseDTO, TimestampMixin):
     expires_at: datetime
     consumed_at: datetime | None = None
     is_existing: bool = False
+
+
+class FirstOrderStatusResponse(BaseDTO):
+    userId: str
+    hasFirstOrder: bool
+    orderId: str | None = None
+    createdAt: datetime | None = None
+
+
+class ReviewStatusResponse(BaseDTO):
+    orderId: str
+    hasReview: bool
+    averageRating: float | None = None
+
+
+class ReorderStatusResponse(BaseDTO):
+    userId: str
+    hasReordered: bool
+    orderId: str | None = None

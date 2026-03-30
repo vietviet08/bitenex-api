@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     abandoned_cart_poll_interval_seconds: int = 60
     abandoned_cart_offer_expiry_hours: int = 24
 
+    # n8n webhook HMAC signing
+    n8n_webhook_secret: str = "change-this-n8n-secret"
+    n8n_webhook_enabled: bool = True
+
     # VNPAY (sandbox by default)
     vnp_tmn_code: str
     vnp_hash_secret: str
