@@ -16,14 +16,21 @@ from app.modules.admin import router as admin_router
 from app.modules.auth import router as auth_router
 from app.modules.dispatch import router as dispatch_router
 from app.modules.driver import router as driver_router
+from app.modules.events import router as events_router
 from app.modules.journey import public_router as journey_public_router
 from app.modules.journey import router as journey_router
+from app.modules.marketing import router as marketing_router
 from app.modules.merchant import router as merchant_router
+from app.modules.merchant.internal_router import internal_router as merchant_internal_router
 from app.modules.notification import router as notification_router
+from app.modules.notification.internal_router import internal_router as notification_internal_router
 from app.modules.order import router as order_router
+from app.modules.order.internal_router import internal_router as order_internal_router
 from app.modules.payment import router as payment_router
 from app.modules.system import router as system_router
 from app.modules.user import router as user_router
+from app.modules.user.internal_router import internal_router as user_internal_router
+from app.modules.webhook import router as webhook_router
 from app.workers import abandoned_cart_worker
 
 settings = get_settings()
@@ -119,3 +126,15 @@ app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(journey_public_router, prefix=API_V1_PREFIX)
 app.include_router(journey_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
+
+# n8n — Internal service routers
+app.include_router(order_internal_router, prefix=API_V1_PREFIX)
+app.include_router(notification_internal_router, prefix=API_V1_PREFIX)
+app.include_router(user_internal_router, prefix=API_V1_PREFIX)
+app.include_router(merchant_internal_router, prefix=API_V1_PREFIX)
+app.include_router(marketing_router, prefix=API_V1_PREFIX)
+app.include_router(events_router, prefix=API_V1_PREFIX)
+
+# n8n — Inbound webhook router (HMAC-protected, no API_V1_PREFIX)
+app.include_router(webhook_router, prefix=API_V1_PREFIX)
+
