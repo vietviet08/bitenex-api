@@ -38,6 +38,7 @@ from app.modules.payment.schemas import (
 )
 from app.modules.payment.vnpay import build_vnpay_payment_url, verify_vnpay_signature
 from app.shared.enums import OrderStatus, PaymentMethod, PaymentStatus, Role
+from app.shared.n8n_client import N8nClient
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -745,6 +746,21 @@ class PaymentService:
                     payment.error_code = str(payload.get("vnp_ResponseCode") or "UNKNOWN")
                     payment.error_message = "Payment failed via VNPAY webhook"
                     payment.gateway_response = json.dumps(payload, sort_keys=True)
+
+                    # WF-06: Payment Failed Recovery
+                    N8nClient.trigger(
+                        "/webhook/bitenex/payment-failed",
+                        {
+                            "paymentId": payment.id,
+                            "orderId": payment.order_id,
+                            "userId": payment.user_id,
+                            "amount": float(payment.amount),
+                            "currency": payment.currency,
+                            "errorCode": payment.error_code,
+                            "errorMessage": payment.error_message,
+                            "failedAt": payment.updated_at.isoformat() if payment.updated_at else None,
+                        },
+                    )
 
             await self.repo.mark_webhook_processed(webhook_event)
             logger.info(

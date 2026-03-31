@@ -27,6 +27,7 @@ wheels/
 # Virtual environments
 venv/
 .venv/
+.venv-ci/
 ENV/
 env/
 
@@ -42,12 +43,16 @@ env/
 .env
 .env.local
 .env.*.local
+.env.docker
 
 # Testing
 .coverage
+coverage.xml
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+.scannerwork/
+.sonar/
 
 # Logs
 *.log

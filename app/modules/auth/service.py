@@ -37,6 +37,7 @@ from app.modules.auth.schemas import (
 from app.modules.merchant.models import Merchant
 from app.modules.user.models import User
 from app.shared.enums import MerchantStatus, Role
+from app.shared.n8n_client import N8nClient
 from app.shared.utils import ensure_utc
 
 logger = logging.getLogger(__name__)
@@ -249,6 +250,17 @@ class AuthService:
         )
 
         logger.info(f"User {user.email} registered successfully")
+
+        # Trigger WF-01: Onboarding → First Order
+        N8nClient.trigger(
+            "/webhook/bitenex/user-registered",
+            {
+                "userId": user.id,
+                "email": user.email,
+                "fullName": user.full_name,
+                "registeredAt": user.created_at.isoformat() if user.created_at else None,
+            },
+        )
 
         # 6. Return response
         return RegisterResponse(
