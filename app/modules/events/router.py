@@ -2,10 +2,12 @@
 # Events Module - Router
 # =============================================================================
 
+import json
 import logging
+from typing import Any
 
 from fastapi import APIRouter, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +24,28 @@ router = APIRouter(
 class TrackEventRequest(BaseModel):
     event: str
     userId: str | None = None
-    properties: dict | None = None
+    properties: dict[str, Any] | None = None
     timestamp: str | None = None
+
+    @field_validator("properties", mode="before")
+    @classmethod
+    def parse_stringified_properties(cls, value: Any) -> dict[str, Any] | None:
+        """
+        Accept both native JSON objects and stringified JSON.
+
+        n8n HTTP Request nodes in this repo currently send `properties`
+        as `JSON.stringify(...)`, so we normalize that here.
+        """
+        if value in (None, ""):
+            return None
+
+        if isinstance(value, str):
+            parsed = json.loads(value)
+            if not isinstance(parsed, dict):
+                raise ValueError("properties must be a JSON object")
+            return parsed
+
+        return value
 
 
 class TrackEventResponse(BaseModel):
