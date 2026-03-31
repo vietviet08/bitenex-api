@@ -16,8 +16,12 @@ import os
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
+from app.core.security import create_access_token
 from app.modules.merchant.models import Merchant
+from app.modules.notification.models import DeviceToken, Notification
+from app.modules.notification.service import NotificationService
 from app.modules.order.models import Order
 from app.modules.user.models import User
 from app.shared.enums import MerchantStatus, OrderStatus, Role
@@ -87,8 +91,33 @@ async def test_active_deliveries_with_order(client: AsyncClient, db_session):
 # =============================================================================
 
 @pytest.mark.asyncio
-async def test_send_push_notification(client: AsyncClient, db_session):
+async def test_send_push_notification(client: AsyncClient, db_session, monkeypatch):
     """WF-01 welcome push — should return notificationId."""
+    async def fake_send_push(
+        self,
+        user_id: str,
+        title: str,
+        body: str,
+        data=None,
+    ) -> int:
+        return 1
+
+    monkeypatch.setattr(NotificationService, "send_push", fake_send_push)
+    monkeypatch.setattr(
+        NotificationService,
+        "has_firebase_configuration",
+        staticmethod(lambda: True),
+    )
+    db_session.add(
+        DeviceToken(
+            user_id="user-wf01-001",
+            token="fcm-token-wf01-001",
+            platform="android",
+            is_active=True,
+        )
+    )
+    await db_session.flush()
+
     resp = await client.post(
         "/api/v1/internal/notifications/push",
         headers=_internal_header(),
@@ -103,6 +132,86 @@ async def test_send_push_notification(client: AsyncClient, db_session):
     data = resp.json()
     assert data["sent"] is True
     assert data["notificationId"] is not None
+
+
+@pytest.mark.asyncio
+async def test_register_and_unregister_device_token(client: AsyncClient, db_session):
+    """Authenticated users can register and unregister their FCM token."""
+    access_token = create_access_token(user_id="user-device-001", role="USER")
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    register_resp = await client.post(
+        "/api/v1/notifications/devices",
+        headers=headers,
+        json={"token": "fcm-token-001", "platform": "android"},
+    )
+    assert register_resp.status_code == 201
+    register_payload = register_resp.json()
+    assert register_payload["platform"] == "android"
+    assert register_payload["is_active"] is True
+
+    result = await db_session.execute(
+        select(DeviceToken).where(DeviceToken.token == "fcm-token-001")
+    )
+    device = result.scalar_one()
+    assert device.user_id == "user-device-001"
+    assert device.is_active is True
+
+    unregister_resp = await client.delete(
+        "/api/v1/notifications/devices/fcm-token-001",
+        headers=headers,
+    )
+    assert unregister_resp.status_code == 200
+
+    result = await db_session.execute(
+        select(DeviceToken).where(DeviceToken.token == "fcm-token-001")
+    )
+    device = result.scalar_one()
+    assert device.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_send_push_notification_without_firebase_config(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+):
+    """If device exists but Firebase Admin is not configured, return sent=false."""
+    db_session.add(
+        DeviceToken(
+            user_id="user-no-firebase-001",
+            token="fcm-token-no-firebase",
+            platform="android",
+            is_active=True,
+        )
+    )
+    await db_session.flush()
+
+    monkeypatch.setattr(
+        NotificationService,
+        "has_firebase_configuration",
+        staticmethod(lambda: False),
+    )
+
+    resp = await client.post(
+        "/api/v1/internal/notifications/push",
+        headers=_internal_header(),
+        json={
+            "userId": "user-no-firebase-001",
+            "title": "Welcome",
+            "body": "Push is queued",
+            "data": {"deepLink": "bitenexuser://promo/welcome"},
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["sent"] is False
+
+    result = await db_session.execute(
+        select(Notification).where(Notification.id == payload["notificationId"])
+    )
+    notification = result.scalar_one()
+    assert notification.error_message == "Firebase Admin is not configured"
 
 
 # =============================================================================
@@ -299,6 +408,42 @@ async def test_issue_voucher_dedup(client: AsyncClient, db_session):
     assert second.status_code == 200
     assert second.json()["isExisting"] is True
     assert second.json()["voucherCode"] == first.json()["voucherCode"]
+
+
+@pytest.mark.asyncio
+async def test_issue_voucher_generates_unique_code_for_different_users(
+    client: AsyncClient,
+    db_session,
+):
+    """Same base voucher code can be issued to multiple users with unique stored codes."""
+    first = await client.post(
+        "/api/v1/internal/marketing/issue-voucher",
+        headers=_internal_header(),
+        json={
+            "userId": "user-voucher-100",
+            "voucherCode": "WELCOME50K",
+            "discountAmount": 50000,
+            "expiresInDays": 7,
+            "reason": "wf01_welcome",
+        },
+    )
+    second = await client.post(
+        "/api/v1/internal/marketing/issue-voucher",
+        headers=_internal_header(),
+        json={
+            "userId": "user-voucher-200",
+            "voucherCode": "WELCOME50K",
+            "discountAmount": 50000,
+            "expiresInDays": 7,
+            "reason": "wf01_welcome",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["isExisting"] is False
+    assert second.json()["isExisting"] is False
+    assert first.json()["voucherCode"] != second.json()["voucherCode"]
 
 
 # =============================================================================

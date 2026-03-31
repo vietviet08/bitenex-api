@@ -3,12 +3,16 @@
 # =============================================================================
 
 import json
+import logging
+import os
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
+from app.integrations.firebase import get_firebase_app
 from app.modules.notification.models import DeviceToken, Notification, NotificationPreference
 from app.modules.notification.schemas import (
     DeviceTokenCreate,
@@ -21,6 +25,9 @@ from app.modules.notification.schemas import (
 from app.modules.user.models import User
 from app.shared.enums import NotificationChannel
 from app.shared.enums import NotificationType
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class NotificationService:
@@ -38,6 +45,16 @@ class NotificationService:
         if isinstance(notification_type, NotificationType):
             return notification_type.value
         return str(notification_type)
+
+    @staticmethod
+    def has_firebase_configuration() -> bool:
+        """Check whether Firebase Admin can be initialized for FCM sending."""
+        return bool(
+            settings.firebase_project_id
+            or settings.firebase_credentials_json
+            or settings.firebase_credentials_path
+            or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        )
 
     async def send_notification(
         self,
@@ -61,10 +78,78 @@ class NotificationService:
         title: str,
         body: str,
         data: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> int:
         """Send push notification to user's devices."""
-        # TODO: Implement
-        pass
+        from firebase_admin import messaging
+
+        result = await self.db.execute(
+            select(DeviceToken).where(
+                DeviceToken.user_id == user_id,
+                DeviceToken.is_active.is_(True),
+                DeviceToken.is_deleted.is_(False),
+            )
+        )
+        tokens = result.scalars().all()
+        if not tokens:
+            return 0
+
+        if not self.has_firebase_configuration():
+            logger.warning(
+                "push.skipped_missing_firebase_configuration user_id=%s token_count=%s",
+                user_id,
+                len(tokens),
+            )
+            return 0
+
+        firebase_app = get_firebase_app()
+        payload = self._stringify_push_data(data)
+        sent_count = 0
+
+        for device_token in tokens:
+            try:
+                message = messaging.Message(
+                    token=device_token.token,
+                    notification=messaging.Notification(title=title, body=body),
+                    data=payload,
+                    android=messaging.AndroidConfig(
+                        priority="high",
+                        notification=messaging.AndroidNotification(
+                            sound="default",
+                        ),
+                    ),
+                    apns=messaging.APNSConfig(
+                        headers={"apns-priority": "10"},
+                        payload=messaging.APNSPayload(
+                            aps=messaging.Aps(
+                                sound="default",
+                                content_available=True,
+                            )
+                        ),
+                    ),
+                )
+                messaging.send(message, app=firebase_app)
+                sent_count += 1
+            except Exception as exc:
+                logger.exception(
+                    "push.send_failed user_id=%s token_id=%s",
+                    user_id,
+                    device_token.id,
+                )
+                if "registration-token-not-registered" in str(exc).lower():
+                    device_token.is_active = False
+
+        return sent_count
+
+    async def count_active_devices(self, user_id: str) -> int:
+        """Count active device tokens for a user."""
+        result = await self.db.execute(
+            select(func.count(DeviceToken.id)).where(
+                DeviceToken.user_id == user_id,
+                DeviceToken.is_active.is_(True),
+                DeviceToken.is_deleted.is_(False),
+            )
+        )
+        return int(result.scalar() or 0)
 
     async def send_email(
         self,
@@ -119,8 +204,30 @@ class NotificationService:
         data: DeviceTokenCreate,
     ) -> DeviceTokenResponse:
         """Register device for push notifications."""
-        # TODO: Implement
-        raise NotImplementedError()
+        result = await self.db.execute(
+            select(DeviceToken).where(
+                DeviceToken.token == data.token,
+                DeviceToken.is_deleted.is_(False),
+            )
+        )
+        device = result.scalar_one_or_none()
+
+        if device is None:
+            device = DeviceToken(
+                user_id=user_id,
+                token=data.token,
+                platform=data.platform,
+                is_active=True,
+            )
+            self.db.add(device)
+        else:
+            device.user_id = user_id
+            device.platform = data.platform
+            device.is_active = True
+
+        await self.db.flush()
+        await self.db.refresh(device)
+        return DeviceTokenResponse.model_validate(device)
 
     async def unregister_device(
         self,
@@ -128,8 +235,19 @@ class NotificationService:
         token: str,
     ) -> None:
         """Unregister a device."""
-        # TODO: Implement
-        pass
+        result = await self.db.execute(
+            select(DeviceToken).where(
+                DeviceToken.user_id == user_id,
+                DeviceToken.token == token,
+                DeviceToken.is_deleted.is_(False),
+            )
+        )
+        device = result.scalar_one_or_none()
+        if device is None:
+            raise NotFoundError("Device token", token)
+
+        device.is_active = False
+        await self.db.flush()
 
     # Preferences
     async def get_preferences(
@@ -194,3 +312,16 @@ class NotificationService:
         self.db.add_all(notifications)
         await self.db.flush()
         return len(notifications)
+
+    @staticmethod
+    def _stringify_push_data(data: dict[str, Any] | None) -> dict[str, str]:
+        if not data:
+            return {}
+
+        payload: dict[str, str] = {}
+        for key, value in data.items():
+            if isinstance(value, str):
+                payload[key] = value
+            else:
+                payload[key] = json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+        return payload
