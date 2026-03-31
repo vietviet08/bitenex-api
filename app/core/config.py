@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     n8n_webhook_secret: str = "change-this-n8n-secret"
     n8n_webhook_enabled: bool = True
 
+    # Firebase Cloud Messaging
+    firebase_project_id: str | None = None
+    firebase_credentials_path: str | None = None
+    firebase_credentials_json: str | None = None
+
     # VNPAY (sandbox by default)
     vnp_tmn_code: str
     vnp_hash_secret: str
