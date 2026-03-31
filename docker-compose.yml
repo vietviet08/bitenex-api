@@ -73,6 +73,9 @@ services:
             - "5678:5678"
         env_file:
             - .env.docker
+        environment:
+            - BITENEX_API_BASE_URL=${BITENEX_API_BASE_URL}
+            - BITENEX_INTERNAL_API_KEY=${BITENEX_INTERNAL_API_KEY}
         volumes:
             - n8n_data:/home/node/.n8n
         restart: unless-stopped

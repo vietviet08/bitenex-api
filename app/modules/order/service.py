@@ -36,6 +36,7 @@ from app.modules.order.schemas import (
 )
 from app.modules.payment.models import Payment, Refund
 from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
+from app.shared.n8n_client import N8nClient
 
 
 class OrderService:
@@ -484,6 +485,34 @@ class OrderService:
         )
         await self.db.flush()
         await self.db.refresh(order)
+
+        # --- n8n Triggers ---
+        # WF-03: fire on every status transition
+        N8nClient.trigger(
+            "/webhook/bitenex/order-status-changed",
+            {
+                "orderId": order.id,
+                "orderNumber": order.order_number,
+                "userId": order.user_id,
+                "merchantId": order.merchant_id,
+                "fromStatus": current_status.value,
+                "toStatus": new_status.value,
+                "changedAt": order.updated_at.isoformat() if order.updated_at else None,
+            },
+        )
+        # WF-04: fire extra trigger when order is delivered
+        if new_status == OrderStatus.DELIVERED:
+            N8nClient.trigger(
+                "/webhook/bitenex/order-delivered",
+                {
+                    "orderId": order.id,
+                    "orderNumber": order.order_number,
+                    "userId": order.user_id,
+                    "merchantId": order.merchant_id,
+                    "deliveredAt": order.updated_at.isoformat() if order.updated_at else None,
+                    "total": float(order.total),
+                },
+            )
 
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)

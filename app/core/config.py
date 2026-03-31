@@ -46,7 +46,8 @@ class Settings(BaseSettings):
     abandoned_cart_poll_interval_seconds: int = 60
     abandoned_cart_offer_expiry_hours: int = 24
 
-    # n8n webhook HMAC signing
+    # n8n integration
+    n8n_base_url: str = "http://localhost:5678"
     n8n_webhook_secret: str = "change-this-n8n-secret"
     n8n_webhook_enabled: bool = True
 
