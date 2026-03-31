@@ -327,6 +327,24 @@ async def test_track_event(client: AsyncClient):
     assert data["event"] == "user_registered"
 
 
+@pytest.mark.asyncio
+async def test_track_event_accepts_stringified_properties(client: AsyncClient):
+    """n8n may send properties as a JSON string; API should normalize it."""
+    resp = await client.post(
+        "/api/v1/internal/events/track",
+        headers=_internal_header(),
+        json={
+            "event": "user_registered",
+            "userId": "user-evt-002",
+            "properties": "{\"source\":\"organic\",\"city\":\"HCM\",\"platform\":\"ios\"}",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["tracked"] is True
+    assert data["event"] == "user_registered"
+
+
 # =============================================================================
 # 10. HMAC Signature Validation
 # =============================================================================
