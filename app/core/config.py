@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     vnp_return_url: str
     vnp_ipn_url: str
 
+    # SMTP Settings
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 465
+    smtp_tls_ssl: bool = True
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | List[str]) -> List[str]:

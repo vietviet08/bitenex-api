@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -62,12 +62,13 @@ async def login(
 )
 async def register(
     request: RegisterRequest,
+    req: Request,
     service: AuthService = Depends(get_auth_service),
 ) -> RegisterResponse:
     """
     Register a new user account.
     """
-    return await service.register(request)
+    return await service.register(request, str(req.base_url))
 
 
 @router.post(
@@ -113,12 +114,13 @@ async def refresh_token(
 )
 async def request_password_reset(
     request: ResetPasswordRequest,
+    req: Request,
     service: AuthService = Depends(get_auth_service),
 ) -> MessageResponse:
     """
     Request password reset. Sends email if account exists.
     """
-    await service.request_password_reset(str(request.email))
+    await service.request_password_reset(str(request.email), str(req.base_url))
     return MessageResponse(message="If the email exists, a reset link has been sent.")
 
 

@@ -38,6 +38,7 @@ from app.modules.merchant.models import Merchant
 from app.modules.user.models import User
 from app.shared.enums import MerchantStatus, Role
 from app.shared.n8n_client import N8nClient
+from app.shared.email_client import EmailClient
 from app.shared.utils import ensure_utc
 
 logger = logging.getLogger(__name__)
@@ -222,13 +223,14 @@ class AuthService:
         await self.db.flush()
         return user
 
-    async def register(self, request: RegisterRequest) -> RegisterResponse:
+    async def register(self, request: RegisterRequest, base_url: str) -> RegisterResponse:
         """
         Register a new user.
 
         Args:
             request: Registration data
-
+            base_url: Base URL context
+        
         Returns:
             RegisterResponse with user info
 
@@ -244,10 +246,8 @@ class AuthService:
         # 4. Generate verification token
         verification_token = create_verification_token(user.id)
 
-        # 5. Log verification URL (email sending out of scope)
-        logger.info(
-            f"Verification token for {user.email}: " f"/api/v1/auth/verify/{verification_token}"
-        )
+        # 5. Send verification email
+        await EmailClient.send_verification_email(user.email, verification_token, base_url)
 
         logger.info(f"User {user.email} registered successfully")
 
@@ -478,12 +478,13 @@ class AuthService:
 
         return True
 
-    async def request_password_reset(self, email: str) -> None:
+    async def request_password_reset(self, email: str, base_url: str) -> None:
         """
         Initiate password reset flow.
 
         Args:
             email: User's email address
+            base_url: Base URL string of the current request
         """
         # 1. Find user by email (silent fail if not found)
         user = await self._get_user_by_email(email)
@@ -496,11 +497,8 @@ class AuthService:
         # 2. Generate reset token
         reset_token = create_password_reset_token(user.id)
 
-        # 3. Log reset URL (email sending out of scope)
-        logger.info(
-            f"Password reset token for {user.email}: "
-            f"/api/v1/auth/password/reset/confirm?token={reset_token}"
-        )
+        # 3. Send password reset email
+        await EmailClient.send_password_reset_email(user.email, reset_token, base_url)
 
     async def reset_password(self, token: str, new_password: str) -> None:
         """
