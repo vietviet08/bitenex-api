@@ -273,8 +273,6 @@ class PaymentService:
 
         if data.amount <= 0:
             raise ValidationError(message="Payment amount must be greater than zero")
-        if payment_method == PaymentMethod.CASH_ON_DELIVERY:
-            raise ValidationError(message="Online payment endpoint does not accept cash method")
 
         order = await self._get_order_for_payment(user_id=user_id, order_id=data.order_id)
 
@@ -304,6 +302,69 @@ class PaymentService:
         completed_payment = completed_payment_result.scalar_one_or_none()
         if completed_payment:
             raise ValidationError(message="Order already has a completed payment")
+
+        if payment_method == PaymentMethod.CASH_ON_DELIVERY:
+            status_changed_at = datetime.now(timezone.utc)
+            payment = Payment(
+                transaction_id=self._generate_transaction_id(),
+                order_id=data.order_id,
+                user_id=user_id,
+                amount=float(data.amount),
+                currency=data.currency.upper(),
+                method=payment_method.value,
+                status=PaymentStatus.PENDING.value,
+                gateway="cash",
+            )
+            self.db.add(payment)
+
+            current_order_status = OrderStatus(order.status)
+            if current_order_status == OrderStatus.PENDING:
+                order.status = OrderStatus.CONFIRMED.value
+                self.db.add(
+                    OrderStatusHistory(
+                        order_id=order.id,
+                        from_status=OrderStatus.PENDING.value,
+                        to_status=OrderStatus.CONFIRMED.value,
+                        changed_by=user_id,
+                        reason="Order confirmed automatically for Cash on Delivery",
+                    )
+                )
+
+            await self.db.flush()
+
+            response = self._to_payment_response(payment, payment_url=None)
+            payload = response.model_dump(mode="json")
+            replay_payload = await self._persist_idempotent_response(
+                scope=scope,
+                key=idempotency_key,
+                request_fingerprint=request_fingerprint,
+                status_code=201,
+                payload=payload,
+            )
+            logger.info(
+                "payment.create.cash trace_id=%s payment_id=%s transaction_id=%s",
+                trace_id,
+                payment.id,
+                payment.transaction_id,
+            )
+
+            # WF-03 triggered implicitly by OrderStatus change if N8nClient hooks are handled in OrderService
+            # Wait, OrderService triggers WF-03. PaymentService directly updates order status here!
+            # It's better to trigger N8nClient.trigger(WebhookEvent.ORDER_STATUS_CHANGED, {...}) here too.
+            N8nClient.trigger(
+                WebhookEvent.ORDER_STATUS_CHANGED,
+                {
+                    "orderId": order.id,
+                    "orderNumber": order.order_number,
+                    "userId": order.user_id,
+                    "merchantId": order.merchant_id,
+                    "fromStatus": current_order_status.value,
+                    "toStatus": OrderStatus.CONFIRMED.value,
+                    "changedAt": status_changed_at.isoformat(),
+                },
+            )
+
+            return PaymentResponse.model_validate(replay_payload)
 
         payment = Payment(
             transaction_id=self._generate_transaction_id(),
