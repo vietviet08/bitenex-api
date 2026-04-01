@@ -41,10 +41,6 @@ class Settings(BaseSettings):
     ws_message_queue_size: int = 100
 
     internal_api_token: str = "dev-internal-token"
-    abandoned_cart_n8n_webhook_url: str | None = None
-    abandoned_cart_timeout_minutes: int = 30
-    abandoned_cart_poll_interval_seconds: int = 60
-    abandoned_cart_offer_expiry_hours: int = 24
 
     # n8n integration
     n8n_base_url: str = "http://localhost:5678"

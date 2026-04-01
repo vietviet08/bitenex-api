@@ -11,6 +11,9 @@ import httpx
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.user.models import User
+from app.shared.n8n_client import N8nClient
+
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError, ValidationError
 from app.modules.journey.models import AbandonedCartJourney, JourneyOffer
@@ -25,7 +28,7 @@ from app.modules.journey.schemas import (
 )
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.order.models import Order
-from app.shared.enums import MerchantStatus
+from app.shared.enums import MerchantStatus, WebhookEvent
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -74,7 +77,9 @@ class JourneyService:
             return None
 
     @staticmethod
-    def _to_activity_response(journey: AbandonedCartJourney) -> AbandonedCartActivityResponse:
+    def _to_activity_response(
+        journey: AbandonedCartJourney,
+    ) -> AbandonedCartActivityResponse:
         return AbandonedCartActivityResponse.model_validate(journey)
 
     @staticmethod
@@ -124,44 +129,22 @@ class JourneyService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    def _build_n8n_payload(self, journey: AbandonedCartJourney) -> dict:
-        payload = self._deserialize_payload(journey.payload_snapshot) or {}
-        anonymous_id = payload.get("anonymous_id")
-        return {
-            "journey": self.JOURNEY_ABANDONED_CART,
-            "trigger_event": "cart_abandoned",
-            "event_time": (journey.abandoned_at or self._now()).isoformat(),
-            "user_id": journey.user_id,
-            "anonymous_id": anonymous_id,
-            "segment_id": "seg_abandoned_cart",
-            "dedupe_key": f"abandoned_cart:{journey.cart_id}",
-            "properties": {
-                "cart_id": journey.cart_id,
-                "cart_value": float(journey.cart_value),
-                "currency": journey.currency,
-                "merchant_id": journey.merchant_id,
-                "merchant_name": journey.merchant_name,
-                "restaurant_open": journey.restaurant_open,
-                "items_available": journey.items_available,
-                "deep_link": journey.deep_link or f"bitenex://cart/{journey.cart_id}",
-                "item_count": journey.item_count,
-            },
-            # Compatibility fields for generic workflows.
-            "userId": journey.user_id,
-            "cartId": journey.cart_id,
-            "cartValue": float(journey.cart_value),
-            "restaurantOpen": journey.restaurant_open,
-            "itemsAvailable": journey.items_available,
-        }
-
     async def upsert_abandoned_cart_activity(
         self,
         data: AbandonedCartActivityUpsert,
     ) -> AbandonedCartActivityResponse:
-        merchant_name, restaurant_open, items_available = await self._resolve_cart_context(data)
-        journey = await self._get_cart_journey(cart_id=data.cart_id, user_id=data.user_id)
+        merchant_name, restaurant_open, items_available = (
+            await self._resolve_cart_context(data)
+        )
+        journey = await self._get_cart_journey(
+            cart_id=data.cart_id, user_id=data.user_id
+        )
         last_activity_at = data.last_activity_at or self._now()
-        normalized_status = self.STATUS_ACTIVE if data.is_active and data.item_count > 0 else self.STATUS_INACTIVE
+        normalized_status = (
+            self.STATUS_ACTIVE
+            if data.is_active and data.item_count > 0
+            else self.STATUS_INACTIVE
+        )
 
         if journey is None:
             journey = AbandonedCartJourney(
@@ -190,7 +173,9 @@ class JourneyService:
             journey.items_available = items_available
             journey.deep_link = data.deep_link
             if data.payload_snapshot is not None:
-                journey.payload_snapshot = self._serialize_payload(data.payload_snapshot)
+                journey.payload_snapshot = self._serialize_payload(
+                    data.payload_snapshot
+                )
             journey.last_activity_at = last_activity_at
             journey.status = normalized_status
             if normalized_status == self.STATUS_ACTIVE:
@@ -222,7 +207,9 @@ class JourneyService:
         self,
         data: AbandonedCartStatusRequest,
     ) -> AbandonedCartStatusResponse:
-        journey = await self._get_cart_journey(cart_id=data.cart_id, user_id=data.user_id)
+        journey = await self._get_cart_journey(
+            cart_id=data.cart_id, user_id=data.user_id
+        )
         if journey is None:
             order = await self._latest_matching_order(
                 user_id=data.user_id,
@@ -244,7 +231,9 @@ class JourneyService:
                 ),
             )
 
-        time_anchor = data.event_time or journey.abandoned_at or journey.last_activity_at
+        time_anchor = (
+            data.event_time or journey.abandoned_at or journey.last_activity_at
+        )
         latest_order = await self._latest_matching_order(
             user_id=journey.user_id,
             merchant_id=journey.merchant_id,
@@ -284,7 +273,9 @@ class JourneyService:
                 },
             )
 
-        journey = await self._get_cart_journey(cart_id=data.cart_id, user_id=data.user_id)
+        journey = await self._get_cart_journey(
+            cart_id=data.cart_id, user_id=data.user_id
+        )
         if journey and journey.recovery_order_id:
             raise ValidationError(message="Cart has already been checked out")
 
@@ -332,7 +323,9 @@ class JourneyService:
             .where(
                 AbandonedCartJourney.user_id == order.user_id,
                 AbandonedCartJourney.merchant_id == order.merchant_id,
-                AbandonedCartJourney.status.in_([self.STATUS_ACTIVE, self.STATUS_ABANDONED]),
+                AbandonedCartJourney.status.in_(
+                    [self.STATUS_ACTIVE, self.STATUS_ABANDONED]
+                ),
                 AbandonedCartJourney.is_deleted.is_(False),
             )
             .order_by(AbandonedCartJourney.last_activity_at.desc())
@@ -348,11 +341,12 @@ class JourneyService:
         await self.db.flush()
 
     async def dispatch_due_abandoned_cart_webhooks(self) -> int:
-        webhook_url = settings.abandoned_cart_n8n_webhook_url
-        if not webhook_url:
+        webhook_path = WebhookEvent.CHECKOUT_ABANDONED.value
+        if not webhook_path:
             return 0
 
-        cutoff = self._now() - timedelta(minutes=settings.abandoned_cart_timeout_minutes)
+        # Hardcoded 30 minutes timeout for abandoned carts
+        cutoff = self._now() - timedelta(minutes=30)
         result = await self.db.execute(
             select(AbandonedCartJourney).where(
                 AbandonedCartJourney.status == self.STATUS_ACTIVE,
@@ -367,27 +361,38 @@ class JourneyService:
         if not candidates:
             return 0
 
+        user_ids = [j.user_id for j in candidates]
+        users_result = await self.db.execute(select(User).where(User.id.in_(user_ids)))
+        user_map = {u.id: u for u in users_result.scalars().all()}
+
         dispatched = 0
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for journey in candidates:
-                try:
-                    now = self._now()
-                    if journey.abandoned_at is None:
-                        journey.abandoned_at = now
-                    response = await client.post(webhook_url, json=self._build_n8n_payload(journey))
-                    response.raise_for_status()
-                    journey.status = self.STATUS_ABANDONED
-                    journey.webhook_triggered_at = now
-                    journey.last_webhook_error = None
-                    dispatched += 1
-                except Exception as exc:
-                    journey.last_webhook_error = str(exc)
-                    logger.warning(
-                        "abandoned_cart.webhook_failed cart_id=%s error=%s",
-                        journey.cart_id,
-                        str(exc),
-                    )
-            await self.db.flush()
+        for journey in candidates:
+            now = self._now()
+            if journey.abandoned_at is None:
+                journey.abandoned_at = now
+
+            user = user_map.get(journey.user_id)
+
+            payload = {
+                "customerId": journey.user_id,
+                "checkoutSessionId": journey.cart_id,
+                "merchantName": journey.merchant_name or "Unknown Merchant",
+                "cartValue": float(journey.cart_value),
+                "currency": journey.currency,
+                "deepLink": journey.deep_link
+                or f"bitenexuser://checkout/{journey.cart_id}",
+                "email": user.email if user else "",
+                "phone": user.phone if user else "",
+            }
+
+            N8nClient.trigger(webhook_path, payload)
+
+            journey.status = self.STATUS_ABANDONED
+            journey.webhook_triggered_at = now
+            journey.last_webhook_error = None
+            dispatched += 1
+
+        await self.db.flush()
 
         return dispatched
 
@@ -432,7 +437,11 @@ class JourneyService:
                 )
             )
             rows = item_result.all()
-            available_ids = {menu_item_id for menu_item_id, is_available in rows if is_available}
-            items_available = len(rows) == len(unique_ids) and len(available_ids) == len(unique_ids)
+            available_ids = {
+                menu_item_id for menu_item_id, is_available in rows if is_available
+            }
+            items_available = len(rows) == len(unique_ids) and len(
+                available_ids
+            ) == len(unique_ids)
 
         return merchant_name, restaurant_open, items_available

@@ -37,7 +37,7 @@ from app.modules.payment.schemas import (
     SavedPaymentMethodResponse,
 )
 from app.modules.payment.vnpay import build_vnpay_payment_url, verify_vnpay_signature
-from app.shared.enums import OrderStatus, PaymentMethod, PaymentStatus, Role
+from app.shared.enums import OrderStatus, PaymentMethod, PaymentStatus, Role, WebhookEvent
 from app.shared.n8n_client import N8nClient
 
 logger = logging.getLogger(__name__)
@@ -749,7 +749,7 @@ class PaymentService:
 
                     # WF-06: Payment Failed Recovery
                     N8nClient.trigger(
-                        "/webhook/bitenex/payment-failed",
+                        WebhookEvent.PAYMENT_FAILED,
                         {
                             "paymentId": payment.id,
                             "orderId": payment.order_id,
