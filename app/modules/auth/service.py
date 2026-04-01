@@ -36,7 +36,7 @@ from app.modules.auth.schemas import (
 )
 from app.modules.merchant.models import Merchant
 from app.modules.user.models import User
-from app.shared.enums import MerchantStatus, Role
+from app.shared.enums import MerchantStatus, Role, WebhookEvent
 from app.shared.n8n_client import N8nClient
 from app.shared.email_client import EmailClient
 from app.shared.utils import ensure_utc
@@ -253,7 +253,7 @@ class AuthService:
 
         # Trigger WF-01: Onboarding → First Order
         N8nClient.trigger(
-            "/webhook/bitenex/user-registered",
+            WebhookEvent.USER_REGISTERED,
             {
                 "userId": user.id,
                 "email": user.email,

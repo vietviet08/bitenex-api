@@ -35,7 +35,7 @@ from app.modules.order.schemas import (
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
-from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
+from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role, WebhookEvent
 from app.shared.n8n_client import N8nClient
 
 
@@ -489,7 +489,7 @@ class OrderService:
         # --- n8n Triggers ---
         # WF-03: fire on every status transition
         N8nClient.trigger(
-            "/webhook/bitenex/order-status-changed",
+            WebhookEvent.ORDER_STATUS_CHANGED,
             {
                 "orderId": order.id,
                 "orderNumber": order.order_number,
@@ -503,7 +503,7 @@ class OrderService:
         # WF-04: fire extra trigger when order is delivered
         if new_status == OrderStatus.DELIVERED:
             N8nClient.trigger(
-                "/webhook/bitenex/order-delivered",
+                WebhookEvent.ORDER_DELIVERED,
                 {
                     "orderId": order.id,
                     "orderNumber": order.order_number,

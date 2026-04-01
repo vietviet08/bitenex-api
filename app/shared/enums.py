@@ -111,3 +111,15 @@ class DispatchStrategy(str, Enum):
     LEAST_BUSY = "LEAST_BUSY"  # Driver with fewest orders
     ROUND_ROBIN = "ROUND_ROBIN"  # Fair distribution
     MANUAL = "MANUAL"  # Manual assignment
+
+
+class WebhookEvent(str, Enum):
+    """
+    N8n Workflow Webhook trigger paths.
+    """
+
+    USER_REGISTERED = "/webhook/bitenex/user-registered"
+    CHECKOUT_ABANDONED = "/webhook/bitenex/checkout-abandoned"
+    ORDER_STATUS_CHANGED = "/webhook/bitenex/order-status-changed"
+    ORDER_DELIVERED = "/webhook/bitenex/order-delivered"
+    PAYMENT_FAILED = "/webhook/bitenex/payment-failed"

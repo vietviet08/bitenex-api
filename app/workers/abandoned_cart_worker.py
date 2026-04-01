@@ -21,7 +21,7 @@ class AbandonedCartWorker(BaseWorker):
         return None
 
     async def _run(self) -> None:
-        interval = max(int(settings.abandoned_cart_poll_interval_seconds), 1)
+        interval = 60
         while self._running:
             try:
                 async with async_session_maker() as session:
