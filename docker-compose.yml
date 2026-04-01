@@ -102,6 +102,25 @@ services:
         networks:
             - bitenex-network
 
+    pgadmin:
+        image: dpage/pgadmin4:8
+        container_name: bitenex-pgadmin
+        restart: unless-stopped
+        profiles:
+            - dev-tools
+        ports:
+            - "${PGADMIN_PORT:-5050}:80"
+        env_file:
+            - .env.docker
+        environment:
+            - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@bitenex.local}
+            - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin123}
+            - PGADMIN_CONFIG_SERVER_MODE=False
+        volumes:
+            - pgadmin_data:/var/lib/pgadmin
+        networks:
+            - bitenex-network
+
 networks:
     bitenex-network:
         driver: bridge
