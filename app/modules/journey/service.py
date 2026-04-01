@@ -346,7 +346,7 @@ class JourneyService:
             return 0
 
         # Hardcoded 30 minutes timeout for abandoned carts
-        cutoff = self._now() - timedelta(minutes=30)
+        cutoff = self._now() - timedelta(minutes=1)
         result = await self.db.execute(
             select(AbandonedCartJourney).where(
                 AbandonedCartJourney.status == self.STATUS_ACTIVE,

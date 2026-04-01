@@ -10,6 +10,7 @@ from app.core.security import create_access_token
 from app.modules.merchant.models import Merchant
 from app.modules.order.models import Order, OrderStatusHistory
 from app.modules.payment.models import Payment, WebhookEvent
+from app.shared.n8n_client import N8nClient
 from app.modules.payment.vnpay import build_vnpay_payment_url, verify_vnpay_signature
 from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role
 
@@ -69,6 +70,80 @@ async def test_vnpay_signature_utility() -> None:
         verify_vnpay_signature({**signed_payload, "vnp_Amount": "999"}, settings.vnp_hash_secret)
         is False
     )
+
+
+@pytest.mark.asyncio
+async def test_create_cash_on_delivery_payment_confirms_order_without_redirect(
+    client: AsyncClient,
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    user_id = "user-payment-cod"
+    merchant = Merchant(
+        user_id="merchant-payment-cod",
+        name="COD Merchant",
+        slug=f"cod-merchant-{uuid4().hex[:8]}",
+        address="7 Merchant St",
+        city="Da Nang",
+        status=MerchantStatus.ACTIVE.value,
+    )
+    db_session.add(merchant)
+    await db_session.flush()
+
+    order = _build_order(user_id=user_id, merchant_id=merchant.id)
+    db_session.add(order)
+    await db_session.flush()
+
+    captured_trigger: dict[str, object] = {}
+
+    def _capture_trigger(webhook_path: str, payload: dict) -> None:
+        captured_trigger["webhook_path"] = webhook_path
+        captured_trigger["payload"] = payload
+
+    monkeypatch.setattr(N8nClient, "trigger", _capture_trigger)
+
+    response = await client.post(
+        "/api/v1/payments",
+        json={
+            "order_id": order.id,
+            "amount": order.total,
+            "currency": "VND",
+            "method": "CASH_ON_DELIVERY",
+        },
+        headers=_auth_header(
+            user_id,
+            Role.USER,
+            idempotency_key=f"idem-cod-{uuid4().hex[:8]}",
+        ),
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["method"] == "CASH_ON_DELIVERY"
+    assert payload["gateway"] == "cash"
+    assert payload["status"] == PaymentStatus.PENDING.value
+    assert payload["payment_url"] is None
+
+    refreshed_order = (
+        await db_session.execute(select(Order).where(Order.id == order.id))
+    ).scalar_one()
+    assert refreshed_order.status == OrderStatus.CONFIRMED.value
+
+    confirmed_history_count = (
+        await db_session.execute(
+            select(func.count(OrderStatusHistory.id)).where(
+                OrderStatusHistory.order_id == order.id,
+                OrderStatusHistory.to_status == OrderStatus.CONFIRMED.value,
+            )
+        )
+    ).scalar_one()
+    assert confirmed_history_count == 1
+
+    assert captured_trigger["webhook_path"] == "/webhook/bitenex/order-status-changed"
+    assert captured_trigger["payload"]["orderId"] == order.id
+    assert captured_trigger["payload"]["fromStatus"] == OrderStatus.PENDING.value
+    assert captured_trigger["payload"]["toStatus"] == OrderStatus.CONFIRMED.value
+    assert captured_trigger["payload"]["changedAt"]
 
 
 @pytest.mark.asyncio
