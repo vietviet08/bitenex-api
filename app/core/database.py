@@ -17,9 +17,15 @@ NAMING_CONVENTION = {
 }
 
 
+connect_args = {}
+if settings.database_ssl:
+    connect_args["ssl"] = settings.database_ssl
+
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.database_echo,
+    connect_args=connect_args,
     pool_pre_ping=True,  # Check connection health before use
     pool_size=10,
     max_overflow=20,
