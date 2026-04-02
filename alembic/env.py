@@ -24,6 +24,13 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def get_connect_args() -> dict[str, str]:
+    connect_args: dict[str, str] = {}
+    if settings.database_ssl:
+        connect_args["ssl"] = settings.database_ssl
+    return connect_args
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -67,6 +74,7 @@ async def run_async_migrations() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=get_connect_args(),
     )
 
     async with connectable.connect() as connection:

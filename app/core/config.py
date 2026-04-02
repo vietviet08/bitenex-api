@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-in-production"
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/bitenex"
+    database_ssl: str | None = None
     database_echo: bool = True
 
     redis_url: str = "redis://localhost:6379/0"
