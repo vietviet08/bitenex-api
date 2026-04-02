@@ -6,20 +6,10 @@ services:
       target: production
     container_name: bitenex-api
     restart: always
+    env_file:
+      - .env
     ports:
-      - "8000:8000"
-    environment:
-      - APP_NAME=Bitenex API
-      - APP_ENV=production
-      - DEBUG=false
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
-      - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      - JWT_ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
-      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
-      - CORS_ORIGINS=${CORS_ORIGINS:-[]}
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"
     deploy:
       resources:
         limits:
@@ -33,8 +23,6 @@ services:
         delay: 5s
         max_attempts: 3
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -51,55 +39,23 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  db:
-    image: postgres:16-alpine
-    container_name: bitenex-db
-    restart: always
-    expose:
-      - "5432"
-    environment:
-      - POSTGRES_USER=${DB_USER:?DB_USER is required}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
-      - POSTGRES_DB=${DB_NAME:-bitenex}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - bitenex-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   redis:
     image: redis:7-alpine
     container_name: bitenex-redis
     restart: always
-    expose:
-      - "6379"
     command: >
       redis-server
       --appendonly yes
-      --maxmemory 128mb
+      --maxmemory 256mb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     networks:
       - bitenex-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -115,13 +71,104 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  n8n:
+    image: n8nio/n8n:${N8N_IMAGE_TAG:-latest}
+    container_name: bitenex-n8n
+    restart: always
+    env_file:
+      - .env.docker
+    ports:
+      - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - bitenex-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sonarqube-db:
+    image: postgres:16-alpine
+    container_name: bitenex-sonarqube-db
+    restart: always
+    env_file:
+      - .env.docker
+    environment:
+      POSTGRES_DB: ${SONARQUBE_POSTGRES_DB:-sonarqube}
+      POSTGRES_USER: ${SONARQUBE_POSTGRES_USER:-sonarqube}
+      POSTGRES_PASSWORD: ${SONARQUBE_POSTGRES_PASSWORD:-sonarqube}
+    expose:
+      - "5432"
+    volumes:
+      - sonarqube_postgres_data:/var/lib/postgresql/data
+    networks:
+      - bitenex-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SONARQUBE_POSTGRES_USER:-sonarqube} -d ${SONARQUBE_POSTGRES_DB:-sonarqube}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sonarqube:
+    image: ${SONARQUBE_IMAGE:-sonarqube:lts-community}
+    container_name: bitenex-sonarqube
+    restart: always
+    env_file:
+      - .env.docker
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    ports:
+      - "${SONARQUBE_BIND_ADDRESS:-127.0.0.1}:${SONARQUBE_PORT:-9000}:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - bitenex-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   bitenex-network:
     driver: bridge
     name: bitenex-network
 
 volumes:
-  postgres_data:
-    name: bitenex-postgres-data
   redis_data:
     name: bitenex-redis-data
+  n8n_data:
+    name: bitenex-n8n-data
+  sonarqube_postgres_data:
+    name: bitenex-sonarqube-postgres-data
+  sonarqube_data:
+    name: bitenex-sonarqube-data
+  sonarqube_extensions:
+    name: bitenex-sonarqube-extensions
+  sonarqube_logs:
+    name: bitenex-sonarqube-logs
