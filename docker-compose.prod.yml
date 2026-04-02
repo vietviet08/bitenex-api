@@ -89,6 +89,29 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: bitenex-pgadmin
+    restart: always
+    env_file:
+      - .env.docker
+    ports:
+      - "${PGADMIN_BIND_ADDRESS:-127.0.0.1}:${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./deploy/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./deploy/pgadmin/pgpassfile:/pgpassfile:ro
+    networks:
+      - bitenex-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   sonarqube-db:
     image: postgres:16-alpine
     container_name: bitenex-sonarqube-db
@@ -164,6 +187,8 @@ volumes:
     name: bitenex-redis-data
   n8n_data:
     name: bitenex-n8n-data
+  pgadmin_data:
+    name: bitenex-pgadmin-data
   sonarqube_postgres_data:
     name: bitenex-sonarqube-postgres-data
   sonarqube_data:
