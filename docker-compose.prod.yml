@@ -1,5 +1,6 @@
 services:
   api:
+    image: ${API_IMAGE:-bitenex-api:local}
     build:
       context: .
       dockerfile: Dockerfile
