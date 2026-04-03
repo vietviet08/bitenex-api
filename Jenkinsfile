@@ -17,10 +17,10 @@ pipeline {
 
     environment {
         LOCAL_IMAGE_NAME = 'bitenex-api'
-        DEPLOY_IMAGE = ''
-        IMAGE_TAG = ''
-        SHORT_COMMIT = ''
-        BUILD_BRANCH = ''
+        DEPLOY_IMAGE = 'bitenex-api:local'
+        IMAGE_TAG = 'develop-local'
+        SHORT_COMMIT = 'unknown'
+        BUILD_BRANCH = 'develop'
     }
 
     stages {
@@ -28,16 +28,35 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    env.BUILD_BRANCH = (
-                        env.CHANGE_TARGET?.trim() ?:
-                        env.BRANCH_NAME?.trim() ?:
-                        env.GIT_BRANCH?.replaceFirst(/^origin\\//, '')?.trim() ?:
-                        'develop'
-                    )
-                    env.SHORT_COMMIT = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-                    env.IMAGE_TAG = "${env.BUILD_BRANCH}-${env.BUILD_NUMBER}-${env.SHORT_COMMIT}"
+                    def resolvedBranch = env.CHANGE_TARGET?.trim()
+
+                    if (!resolvedBranch) {
+                        resolvedBranch = env.BRANCH_NAME?.trim()
+                    }
+
+                    if (!resolvedBranch) {
+                        def gitBranch = env.GIT_BRANCH?.trim()
+                        if (gitBranch?.startsWith('origin/')) {
+                            gitBranch = gitBranch.substring('origin/'.length())
+                        }
+                        resolvedBranch = gitBranch
+                    }
+
+                    if (!resolvedBranch) {
+                        resolvedBranch = 'develop'
+                    }
+
+                    def shortCommit = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+
+                    env.BUILD_BRANCH = resolvedBranch
+                    env.SHORT_COMMIT = shortCommit
+                    env.IMAGE_TAG = "${resolvedBranch}-${env.BUILD_NUMBER}-${shortCommit}"
                     env.DEPLOY_IMAGE = "${env.LOCAL_IMAGE_NAME}:local"
+                    echo "CHANGE_TARGET=${env.CHANGE_TARGET ?: ''}"
+                    echo "BRANCH_NAME=${env.BRANCH_NAME ?: ''}"
+                    echo "GIT_BRANCH=${env.GIT_BRANCH ?: ''}"
                     echo "Deploy branch resolved from Jenkins context: ${env.BUILD_BRANCH}"
+                    echo "Image tag: ${env.IMAGE_TAG}"
                 }
             }
         }
@@ -46,6 +65,9 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+
+                    : "${LOCAL_IMAGE_NAME:?LOCAL_IMAGE_NAME is required}"
+                    : "${IMAGE_TAG:?IMAGE_TAG is required}"
 
                     docker build \
                     --target production \
@@ -67,6 +89,11 @@ pipeline {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
 
+                    : "${LOCAL_IMAGE_NAME:?LOCAL_IMAGE_NAME is required}"
+                    : "${IMAGE_TAG:?IMAGE_TAG is required}"
+                    : "${DEPLOY_IMAGE:?DEPLOY_IMAGE is required}"
+                    : "${ECR_REGISTRY:?ECR_REGISTRY is required}"
+
                     aws ecr get-login-password --region "${AWS_REGION}" | \
                     docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
@@ -80,6 +107,10 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+
+                    : "${DEPLOY_DIR:?DEPLOY_DIR is required}"
+                    : "${REPO_URL:?REPO_URL is required}"
+                    : "${BUILD_BRANCH:?BUILD_BRANCH is required}"
 
                     mkdir -p "$(dirname "${DEPLOY_DIR}")"
 
@@ -98,6 +129,10 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+
+                    : "${DEPLOY_DIR:?DEPLOY_DIR is required}"
+                    : "${COMPOSE_FILE:?COMPOSE_FILE is required}"
+                    : "${DEPLOY_IMAGE:?DEPLOY_IMAGE is required}"
 
                     cd "${DEPLOY_DIR}"
 
