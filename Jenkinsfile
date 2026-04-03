@@ -190,8 +190,12 @@ ECR_REPOSITORY=${ecrRepository}
             script {
                 def deployImage = 'bitenex-api:local'
                 if (fileExists('.jenkins-build.env')) {
-                    def metadata = readProperties text: readFile('.jenkins-build.env')
-                    deployImage = metadata.DEPLOY_IMAGE ?: deployImage
+                    def metadataText = readFile('.jenkins-build.env')
+                    metadataText.eachLine { line ->
+                        if (line.startsWith('DEPLOY_IMAGE=')) {
+                            deployImage = line.substring('DEPLOY_IMAGE='.length()).trim()
+                        }
+                    }
                 }
                 echo "Deployment completed with image ${deployImage}"
             }
