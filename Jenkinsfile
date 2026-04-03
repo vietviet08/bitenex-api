@@ -21,6 +21,12 @@ pipeline {
         IMAGE_TAG = 'develop-local'
         SHORT_COMMIT = 'unknown'
         BUILD_BRANCH = 'develop'
+        ECR_REGISTRY = ''
+        ECR_REPOSITORY = 'bitenex-api'
+        REPO_URL = 'https://github.com/vietviet08/bitenex-api.git'
+        DEPLOY_DIR = '/opt/bitenex/repo'
+        COMPOSE_FILE = 'docker-compose.prod.yml'
+        AWS_REGION = 'ap-southeast-1'
     }
 
     stages {
@@ -47,16 +53,31 @@ pipeline {
                     }
 
                     def shortCommit = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+                    def repoUrl = params.REPO_URL?.trim() ?: 'https://github.com/vietviet08/bitenex-api.git'
+                    def deployDir = params.DEPLOY_DIR?.trim() ?: '/opt/bitenex/repo'
+                    def composeFile = params.COMPOSE_FILE?.trim() ?: 'docker-compose.prod.yml'
+                    def awsRegion = params.AWS_REGION?.trim() ?: 'ap-southeast-1'
+                    def ecrRegistry = params.ECR_REGISTRY?.trim() ?: ''
+                    def ecrRepository = params.ECR_REPOSITORY?.trim() ?: 'bitenex-api'
 
                     env.BUILD_BRANCH = resolvedBranch
                     env.SHORT_COMMIT = shortCommit
                     env.IMAGE_TAG = "${resolvedBranch}-${env.BUILD_NUMBER}-${shortCommit}"
                     env.DEPLOY_IMAGE = "${env.LOCAL_IMAGE_NAME}:local"
+                    env.REPO_URL = repoUrl
+                    env.DEPLOY_DIR = deployDir
+                    env.COMPOSE_FILE = composeFile
+                    env.AWS_REGION = awsRegion
+                    env.ECR_REGISTRY = ecrRegistry
+                    env.ECR_REPOSITORY = ecrRepository
                     echo "CHANGE_TARGET=${env.CHANGE_TARGET ?: ''}"
                     echo "BRANCH_NAME=${env.BRANCH_NAME ?: ''}"
                     echo "GIT_BRANCH=${env.GIT_BRANCH ?: ''}"
                     echo "Deploy branch resolved from Jenkins context: ${env.BUILD_BRANCH}"
                     echo "Image tag: ${env.IMAGE_TAG}"
+                    echo "AWS region: ${env.AWS_REGION}"
+                    echo "ECR registry: ${env.ECR_REGISTRY ?: '(disabled)'}"
+                    echo "ECR repository: ${env.ECR_REPOSITORY}"
                 }
             }
         }
@@ -80,11 +101,11 @@ pipeline {
 
         stage('Push image to ECR') {
             when {
-                expression { return params.ECR_REGISTRY?.trim() }
+                expression { return env.ECR_REGISTRY?.trim() }
             }
             steps {
                 script {
-                    env.DEPLOY_IMAGE = "${params.ECR_REGISTRY.trim()}/${params.ECR_REPOSITORY.trim()}:${env.IMAGE_TAG}"
+                    env.DEPLOY_IMAGE = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.IMAGE_TAG}"
                 }
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
@@ -137,9 +158,9 @@ pipeline {
                     cd "${DEPLOY_DIR}"
 
                     if [ -n "${ECR_REGISTRY}" ]; then
-                    aws ecr get-login-password --region "${AWS_REGION}" | \
-                        docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-                    API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" pull api
+                        aws ecr get-login-password --region "${AWS_REGION}" | \
+                            docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+                        API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" pull api
                     fi
 
                     API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate api
