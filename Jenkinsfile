@@ -136,6 +136,7 @@ ECR_REPOSITORY=${ecrRepository}
                     set -a
                     . ./.jenkins-build.env
                     set +a
+                    umask 0002
 
                     : "${DEPLOY_DIR:?DEPLOY_DIR is required}"
                     : "${REPO_URL:?REPO_URL is required}"
@@ -148,6 +149,7 @@ ECR_REPOSITORY=${ecrRepository}
                     git clone "${REPO_URL}" "${DEPLOY_DIR}"
                     fi
 
+                    git -C "${DEPLOY_DIR}" config core.sharedRepository group
                     git -C "${DEPLOY_DIR}" fetch --all --prune
                     git -C "${DEPLOY_DIR}" checkout "${BUILD_BRANCH}"
                     git -C "${DEPLOY_DIR}" reset --hard "origin/${BUILD_BRANCH}"
