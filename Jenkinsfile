@@ -101,7 +101,7 @@ pipeline {
 
         stage('Push image to ECR') {
             when {
-                expression { return env.ECR_REGISTRY?.trim() }
+                expression { return params.ECR_REGISTRY?.trim() }
             }
             steps {
                 script {
@@ -134,6 +134,7 @@ pipeline {
                     : "${BUILD_BRANCH:?BUILD_BRANCH is required}"
 
                     mkdir -p "$(dirname "${DEPLOY_DIR}")"
+                    git config --global --add safe.directory "${DEPLOY_DIR}"
 
                     if [ ! -d "${DEPLOY_DIR}/.git" ]; then
                     git clone "${REPO_URL}" "${DEPLOY_DIR}"
