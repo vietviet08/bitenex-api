@@ -32,6 +32,7 @@ def get_notification_service(
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class PushNotificationRequest(BaseModel):
     userId: str
     title: str
@@ -57,6 +58,7 @@ class NotificationAck(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @internal_router.post(
     "/push",
@@ -125,7 +127,10 @@ async def send_push_notification(
 
     logger.info(
         "push.queued user_id=%s title=%s notification_id=%s sent_count=%s",
-        req.userId, req.title, notif.id, sent_count,
+        req.userId,
+        req.title,
+        notif.id,
+        sent_count,
     )
 
     return NotificationAck(notificationId=notif.id, sent=sent_count > 0)
