@@ -21,7 +21,7 @@ pipeline {
         IMAGE_TAG = 'develop-local'
         SHORT_COMMIT = 'unknown'
         BUILD_BRANCH = 'develop'
-        ECR_REGISTRY = ''
+        ECR_REGISTRY = '640168447652.dkr.ecr.ap-southeast-1.amazonaws.com'
         ECR_REPOSITORY = 'bitenex-api'
         REPO_URL = 'https://github.com/vietviet08/bitenex-api.git'
         DEPLOY_DIR = '/opt/bitenex/repo'
@@ -53,12 +53,12 @@ pipeline {
                     }
 
                     def shortCommit = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-                    def repoUrl = params.REPO_URL?.trim() ?: 'https://github.com/vietviet08/bitenex-api.git'
-                    def deployDir = params.DEPLOY_DIR?.trim() ?: '/opt/bitenex/repo'
-                    def composeFile = params.COMPOSE_FILE?.trim() ?: 'docker-compose.prod.yml'
-                    def awsRegion = params.AWS_REGION?.trim() ?: 'ap-southeast-1'
-                    def ecrRegistry = params.ECR_REGISTRY?.trim() ?: ''
-                    def ecrRepository = params.ECR_REPOSITORY?.trim() ?: 'bitenex-api'
+                    def repoUrl = params.REPO_URL?.trim() ?: env.REPO_URL
+                    def deployDir = params.DEPLOY_DIR?.trim() ?: env.DEPLOY_DIR
+                    def composeFile = params.COMPOSE_FILE?.trim() ?: env.COMPOSE_FILE
+                    def awsRegion = params.AWS_REGION?.trim() ?: env.AWS_REGION
+                    def ecrRegistry = params.ECR_REGISTRY?.trim() ?: env.ECR_REGISTRY
+                    def ecrRepository = params.ECR_REPOSITORY?.trim() ?: env.ECR_REPOSITORY
 
                     env.BUILD_BRANCH = resolvedBranch
                     env.SHORT_COMMIT = shortCommit
@@ -100,12 +100,13 @@ pipeline {
         }
 
         stage('Push image to ECR') {
-            when {
-                expression { return params.ECR_REGISTRY?.trim() }
-            }
             steps {
                 script {
-                    env.DEPLOY_IMAGE = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.IMAGE_TAG}"
+                    if (env.ECR_REGISTRY?.trim()) {
+                        env.DEPLOY_IMAGE = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.IMAGE_TAG}"
+                    } else {
+                        env.DEPLOY_IMAGE = "${env.LOCAL_IMAGE_NAME}:local"
+                    }
                 }
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
@@ -113,10 +114,14 @@ pipeline {
                     : "${LOCAL_IMAGE_NAME:?LOCAL_IMAGE_NAME is required}"
                     : "${IMAGE_TAG:?IMAGE_TAG is required}"
                     : "${DEPLOY_IMAGE:?DEPLOY_IMAGE is required}"
-                    : "${ECR_REGISTRY:?ECR_REGISTRY is required}"
+
+                    if [ -z "${ECR_REGISTRY}" ]; then
+                        echo "ECR registry is disabled. Skipping image push."
+                        exit 0
+                    fi
 
                     aws ecr get-login-password --region "${AWS_REGION}" | \
-                    docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+                        docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
                     docker tag "${LOCAL_IMAGE_NAME}:${IMAGE_TAG}" "${DEPLOY_IMAGE}"
                     docker push "${DEPLOY_IMAGE}"
