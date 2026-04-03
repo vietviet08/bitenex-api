@@ -16,9 +16,9 @@ Production-grade backend for the **Bitenex** food delivery platform — connecti
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Quick Start (Docker)](#quick-start-docker)
-  - [Local Development (without Docker)](#local-development-without-docker)
+    - [Prerequisites](#prerequisites)
+    - [Quick Start (Docker)](#quick-start-docker)
+    - [Local Development (without Docker)](#local-development-without-docker)
 - [Configuration](#configuration)
 - [API Documentation](#api-documentation)
 - [Database & Migrations](#database--migrations)
@@ -46,20 +46,20 @@ Production-grade backend for the **Bitenex** food delivery platform — connecti
 
 ## Tech Stack
 
-| Category         | Technology                              |
-| ---------------- | --------------------------------------- |
-| **Language**     | Python 3.11+                            |
-| **Framework**    | FastAPI (async)                         |
-| **ORM**          | SQLAlchemy 2.0 (async + asyncpg)        |
-| **Database**     | PostgreSQL 16                           |
-| **Cache/Queue**  | Redis 7                                 |
-| **Migrations**   | Alembic                                 |
-| **Auth**         | JWT (PyJWT) + bcrypt (passlib)          |
-| **Validation**   | Pydantic v2 + pydantic-settings         |
-| **Testing**      | pytest + pytest-asyncio (SQLite in-mem) |
-| **Linting**      | Ruff, Black, mypy (strict)              |
-| **Containers**   | Docker + Docker Compose                 |
-| **WebSocket**    | FastAPI WebSocket + websockets          |
+| Category        | Technology                              |
+| --------------- | --------------------------------------- |
+| **Language**    | Python 3.11+                            |
+| **Framework**   | FastAPI (async)                         |
+| **ORM**         | SQLAlchemy 2.0 (async + asyncpg)        |
+| **Database**    | PostgreSQL 16                           |
+| **Cache/Queue** | Redis 7                                 |
+| **Migrations**  | Alembic                                 |
+| **Auth**        | JWT (PyJWT) + bcrypt (passlib)          |
+| **Validation**  | Pydantic v2 + pydantic-settings         |
+| **Testing**     | pytest + pytest-asyncio (SQLite in-mem) |
+| **Linting**     | Ruff, Black, mypy (strict)              |
+| **Containers**  | Docker + Docker Compose                 |
+| **WebSocket**   | FastAPI WebSocket + websockets          |
 
 ---
 
@@ -92,12 +92,12 @@ app/
 
 Each domain module follows a strict **4-file pattern**:
 
-| File           | Responsibility                                          |
-| -------------- | ------------------------------------------------------- |
-| `models.py`    | SQLAlchemy ORM models (inherit `BaseModel`)             |
-| `schemas.py`   | Pydantic request/response DTOs (inherit `BaseDTO`)      |
-| `service.py`   | Business logic class, injected with `AsyncSession`      |
-| `router.py`    | FastAPI endpoints, service via `Depends(get_service)`   |
+| File         | Responsibility                                        |
+| ------------ | ----------------------------------------------------- |
+| `models.py`  | SQLAlchemy ORM models (inherit `BaseModel`)           |
+| `schemas.py` | Pydantic request/response DTOs (inherit `BaseDTO`)    |
+| `service.py` | Business logic class, injected with `AsyncSession`    |
+| `router.py`  | FastAPI endpoints, service via `Depends(get_service)` |
 
 **Data Flow:**
 
@@ -201,28 +201,28 @@ VNP_IPN_URL=http://localhost:8000/api/v1/payments/vnpay/ipn
 
 When running in development mode (`DEBUG=true`), interactive API docs are available at:
 
-| Tool         | URL                                |
-| ------------ | ---------------------------------- |
-| **Swagger**  | http://localhost:8000/docs         |
-| **ReDoc**    | http://localhost:8000/redoc        |
-| **OpenAPI**  | http://localhost:8000/openapi.json |
-| **Health**   | http://localhost:8000/health       |
+| Tool        | URL                                |
+| ----------- | ---------------------------------- |
+| **Swagger** | http://localhost:8000/docs         |
+| **ReDoc**   | http://localhost:8000/redoc        |
+| **OpenAPI** | http://localhost:8000/openapi.json |
+| **Health**  | http://localhost:8000/health       |
 
 ### API Endpoints Overview
 
 All domain endpoints are prefixed with `/api/v1`:
 
-| Module         | Prefix                    | Description                     |
-| -------------- | ------------------------- | ------------------------------- |
-| Auth           | `/api/v1/auth`            | Login, register, refresh tokens |
-| Users          | `/api/v1/users`           | User profile management         |
-| Merchants      | `/api/v1/merchants`       | Merchant & menu operations      |
-| Drivers        | `/api/v1/drivers`         | Driver management & status      |
-| Orders         | `/api/v1/orders`          | Order CRUD & lifecycle          |
-| Dispatch       | `/api/v1/dispatch`        | Driver dispatch & assignment    |
-| Payments       | `/api/v1/payments`        | Payment processing & webhooks   |
-| Notifications  | `/api/v1/notifications`   | Notification management         |
-| Admin          | `/api/v1/admin`           | Admin operations                |
+| Module        | Prefix                  | Description                     |
+| ------------- | ----------------------- | ------------------------------- |
+| Auth          | `/api/v1/auth`          | Login, register, refresh tokens |
+| Users         | `/api/v1/users`         | User profile management         |
+| Merchants     | `/api/v1/merchants`     | Merchant & menu operations      |
+| Drivers       | `/api/v1/drivers`       | Driver management & status      |
+| Orders        | `/api/v1/orders`        | Order CRUD & lifecycle          |
+| Dispatch      | `/api/v1/dispatch`      | Driver dispatch & assignment    |
+| Payments      | `/api/v1/payments`      | Payment processing & webhooks   |
+| Notifications | `/api/v1/notifications` | Notification management         |
+| Admin         | `/api/v1/admin`         | Admin operations                |
 
 ---
 
@@ -340,29 +340,29 @@ bitenex-api/
 
 ## Available Make Commands
 
-| Command            | Description                               |
-| ------------------ | ----------------------------------------- |
-| `make help`        | Show all available commands                |
-| `make build`       | Build Docker images                       |
-| `make up`          | Start all services (API, DB, Redis)        |
-| `make down`        | Stop all services                         |
-| `make restart`     | Restart all services                      |
-| `make logs`        | View logs (all services)                  |
-| `make logs-api`    | View API logs only                        |
-| `make shell`       | Open shell in API container               |
-| `make db-shell`    | Open PostgreSQL shell                     |
-| `make migrate`     | Run Alembic migrations                    |
-| `make migrate-new` | Create a new migration                    |
-| `make migrate-down`| Rollback one migration                    |
-| `make test`        | Run tests                                 |
-| `make test-cov`    | Run tests with coverage report            |
-| `make lint`        | Run Ruff linting                          |
-| `make format`      | Format code (Black + Ruff fix)            |
-| `make dev-tools`   | Start with pgAdmin (http://localhost:5050) |
-| `make prod-up`     | Start production services                 |
-| `make prod-down`   | Stop production services                  |
-| `make clean`       | Remove containers and volumes             |
-| `make prune`       | Remove all unused Docker resources        |
+| Command             | Description                                |
+| ------------------- | ------------------------------------------ |
+| `make help`         | Show all available commands                |
+| `make build`        | Build Docker images                        |
+| `make up`           | Start all services (API, DB, Redis)        |
+| `make down`         | Stop all services                          |
+| `make restart`      | Restart all services                       |
+| `make logs`         | View logs (all services)                   |
+| `make logs-api`     | View API logs only                         |
+| `make shell`        | Open shell in API container                |
+| `make db-shell`     | Open PostgreSQL shell                      |
+| `make migrate`      | Run Alembic migrations                     |
+| `make migrate-new`  | Create a new migration                     |
+| `make migrate-down` | Rollback one migration                     |
+| `make test`         | Run tests                                  |
+| `make test-cov`     | Run tests with coverage report             |
+| `make lint`         | Run Ruff linting                           |
+| `make format`       | Format code (Black + Ruff fix)             |
+| `make dev-tools`    | Start with pgAdmin (http://localhost:5050) |
+| `make prod-up`      | Start production services                  |
+| `make prod-down`    | Stop production services                   |
+| `make clean`        | Remove containers and volumes              |
+| `make prune`        | Remove all unused Docker resources         |
 
 ---
 
