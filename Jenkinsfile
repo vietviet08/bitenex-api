@@ -1,5 +1,4 @@
 pipeline {
-    
     agent any
 
     options {
@@ -8,201 +7,117 @@ pipeline {
     }
 
     parameters {
-        choice(
-            name: 'BRANCH_SOURCE',
-            choices: ['auto', 'develop', 'master', 'main'],
-            description: 'auto = infer from BRANCH_NAME/CHANGE_TARGET'
-        )
-        string(name: 'EC2_HOST', defaultValue: 'ec2-54-179-86-79.ap-southeast-1.compute.amazonaws.com', description: 'EC2 public hostname or IP')
-        string(name: 'EC2_USER', defaultValue: 'ubuntu', description: 'SSH user on EC2')
-        string(name: 'EC2_PORT', defaultValue: '22', description: 'SSH port')
-        string(name: 'SSH_CREDENTIALS_ID', defaultValue: 'ec2-pem-key', description: 'Jenkins Credentials ID (SSH Username with private key PEM)')
-        string(name: 'REMOTE_BASE_DIR', defaultValue: '/home/ubuntu/apps', description: 'Base directory on EC2')
-        string(name: 'API_SUBDIR', defaultValue: 'bitenex-api', description: 'Folder name for API repo on EC2')
-        string(name: 'REPO_URL', defaultValue: 'https://github.com/vietviet08/bitnex-api', description: 'Git repository URL accessible from EC2')
+        string(name: 'REPO_URL', defaultValue: 'https://github.com/vietviet08/bitenex-api.git', description: 'Git repository URL')
+        string(name: 'DEPLOY_DIR', defaultValue: '/opt/bitenex/repo', description: 'Deployment checkout on the Jenkins host')
+        string(name: 'COMPOSE_FILE', defaultValue: 'docker-compose.prod.yml', description: 'Compose file used in deployment')
+        string(name: 'AWS_REGION', defaultValue: 'ap-southeast-1', description: 'AWS region for ECR')
+        string(name: 'ECR_REGISTRY', defaultValue: '640168447652.dkr.ecr.ap-southeast-1.amazonaws.com', description: 'Optional ECR registry, e.g. 123456789012.dkr.ecr.ap-southeast-1.amazonaws.com')
+        string(name: 'ECR_REPOSITORY', defaultValue: 'bitenex-api', description: 'ECR repository name')
     }
 
     environment {
-        DEPLOY_BRANCH = ''
+        LOCAL_IMAGE_NAME = 'bitenex-api'
+        DEPLOY_IMAGE = ''
+        IMAGE_TAG = ''
+        SHORT_COMMIT = ''
+        BUILD_BRANCH = ''
     }
 
     stages {
-        stage('Resolve Branch') {
+        stage('Checkout') {
             steps {
+                checkout scm
                 script {
-                    def normalize = { String v ->
-                        if (!v) return ''
-                        return v.replaceFirst(/^origin\//, '').trim()
-                    }
-
-                    def selected = params.BRANCH_SOURCE?.trim()
-                    def fromPrTarget = normalize(env.CHANGE_TARGET)
-                    def fromBranchName = normalize(env.BRANCH_NAME)
-                    def resolvedBranch = 'develop'
-
-                    if (selected && selected != 'auto') {
-                        resolvedBranch = selected
-                    } else if (fromPrTarget in ['develop', 'master', 'main']) {
-                        resolvedBranch = fromPrTarget
-                    } else if (fromBranchName in ['develop', 'master', 'main']) {
-                        resolvedBranch = fromBranchName
-                    }
-
-                    if (!(resolvedBranch in ['develop', 'master', 'main'])) {
-                        resolvedBranch = 'develop'
-                    }
-
-                    env.DEPLOY_BRANCH = resolvedBranch
-
-                    echo "Resolved deploy branch: ${resolvedBranch}"
+                    env.BUILD_BRANCH = (
+                        env.CHANGE_TARGET?.trim() ?:
+                        env.BRANCH_NAME?.trim() ?:
+                        env.GIT_BRANCH?.replaceFirst(/^origin\\//, '')?.trim() ?:
+                        'develop'
+                    )
+                    env.SHORT_COMMIT = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.BUILD_BRANCH}-${env.BUILD_NUMBER}-${env.SHORT_COMMIT}"
+                    env.DEPLOY_IMAGE = "${env.LOCAL_IMAGE_NAME}:local"
+                    echo "Deploy branch resolved from Jenkins context: ${env.BUILD_BRANCH}"
                 }
             }
         }
 
-        stage('Deploy API on EC2') {
+        stage('Build API image') {
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+
+                    docker build \
+                    --target production \
+                    -t "${LOCAL_IMAGE_NAME}:${IMAGE_TAG}" \
+                    -t "${LOCAL_IMAGE_NAME}:local" \
+                    .
+                    '''
+            }
+        }
+
+        stage('Push image to ECR') {
+            when {
+                expression { return params.ECR_REGISTRY?.trim() }
+            }
             steps {
                 script {
-                    def normalize = { String v ->
-                        if (!v) return ''
-                        return v.replaceFirst(/^origin\//, '').trim()
-                    }
-
-                    def ec2Host = params.EC2_HOST?.trim()
-                    def ec2User = params.EC2_USER?.trim() ?: 'ubuntu'
-                    def ec2Port = params.EC2_PORT?.trim() ?: '22'
-                    def remoteBaseDir = params.REMOTE_BASE_DIR?.trim() ?: '/home/ubuntu/apps'
-                    def apiSubdir = params.API_SUBDIR?.trim() ?: 'bitenex-api'
-                    def repoUrl = params.REPO_URL?.trim()
-                    def selected = params.BRANCH_SOURCE?.trim()
-                    def deployBranch = 'develop'
-
-                    if (selected && selected != 'auto') {
-                        deployBranch = selected
-                    } else {
-                        def fromPrTarget = normalize(env.CHANGE_TARGET)
-                        def fromBranchName = normalize(env.BRANCH_NAME)
-                        if (fromPrTarget in ['develop', 'master', 'main']) {
-                            deployBranch = fromPrTarget
-                        } else if (fromBranchName in ['develop', 'master', 'main']) {
-                            deployBranch = fromBranchName
-                        }
-                    }
-
-                    if (!(deployBranch in ['develop', 'master', 'main'])) {
-                        deployBranch = 'develop'
-                    }
-
-                    if (!ec2Host) {
-                        error('EC2_HOST is required')
-                    }
-                    if (!repoUrl) {
-                        error('REPO_URL is required')
-                    }
-
-                    withCredentials([
-                        sshUserPrivateKey(
-                            credentialsId: params.SSH_CREDENTIALS_ID,
-                            keyFileVariable: 'SSH_KEY_FILE',
-                            usernameVariable: 'SSH_USERNAME'
-                        )
-                    ]) {
-                        withEnv([
-                            "EC2_HOST=${ec2Host}",
-                            "EC2_USER=${ec2User}",
-                            "EC2_PORT=${ec2Port}",
-                            "REMOTE_BASE_DIR=${remoteBaseDir}",
-                            "API_SUBDIR=${apiSubdir}",
-                            "REPO_URL=${repoUrl}",
-                            "DEPLOY_BRANCH=${deployBranch}"
-                        ]) {
-                            sh '''#!/usr/bin/env bash
-set -euo pipefail
-
-REMOTE_USER="$EC2_USER"
-if [ -z "$REMOTE_USER" ]; then
-  REMOTE_USER="$SSH_USERNAME"
-fi
-SSH_OPTS="-i $SSH_KEY_FILE -p ${EC2_PORT} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
-
-ssh $SSH_OPTS "$REMOTE_USER@$EC2_HOST" \
-  DEPLOY_BRANCH="$DEPLOY_BRANCH" \
-  REMOTE_BASE_DIR="$REMOTE_BASE_DIR" \
-  API_SUBDIR="$API_SUBDIR" \
-  REPO_URL="$REPO_URL" \
-  'bash -se' <<'REMOTE_EOF'
-set -euo pipefail
-
-APP_DIR="$REMOTE_BASE_DIR/$API_SUBDIR"
-
-echo "[info] Deploy branch: $DEPLOY_BRANCH"
-echo "[info] App dir: $APP_DIR"
-
-mkdir -p "$REMOTE_BASE_DIR"
-
-if [ ! -d "$APP_DIR/.git" ]; then
-  echo "[git] Repository not found, cloning..."
-  git clone "$REPO_URL" "$APP_DIR"
-fi
-
-cd "$APP_DIR"
-
-echo "[git] Fetch latest"
-git fetch --all --prune
-
-if git show-ref --verify --quiet "refs/remotes/origin/$DEPLOY_BRANCH"; then
-  git checkout "$DEPLOY_BRANCH"
-  git reset --hard "origin/$DEPLOY_BRANCH"
-else
-  echo "[error] Branch origin/$DEPLOY_BRANCH not found"
-  exit 1
-fi
-
-echo "[lint] Basic lint (always bypass)"
-if command -v ruff >/dev/null 2>&1; then
-  ruff check . || true
-else
-  echo "[lint] ruff not found on EC2, skipping (bypass enabled)"
-fi
-
-echo "[test] Run pytest"
-if [ ! -f requirements.txt ]; then
-    echo "[error] requirements.txt not found"
-    exit 1
-fi
-
-if ! python3 -m venv .venv-ci >/dev/null 2>&1; then
-    echo "[test] python3-venv missing, trying to install"
-    sudo apt-get update
-    sudo apt-get install -y python3-venv
-    python3 -m venv .venv-ci
-fi
-
-. .venv-ci/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-pip install pytest
-pytest
-
-echo "[docker] Build API image"
-docker compose -f docker-compose.yml build api
-
-echo "[docker] Deploy API container"
-docker compose -f docker-compose.yml up -d api
-
-echo "[docker] Current API container status"
-docker compose -f docker-compose.yml ps api
-REMOTE_EOF
-'''
-                        }
-                    }
+                    env.DEPLOY_IMAGE = "${params.ECR_REGISTRY.trim()}/${params.ECR_REPOSITORY.trim()}:${env.IMAGE_TAG}"
                 }
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+
+                    aws ecr get-login-password --region "${AWS_REGION}" | \
+                    docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+
+                    docker tag "${LOCAL_IMAGE_NAME}:${IMAGE_TAG}" "${DEPLOY_IMAGE}"
+                    docker push "${DEPLOY_IMAGE}"
+                    '''
+            }
+        }
+
+        stage('Update deployment checkout') {
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+
+                    mkdir -p "$(dirname "${DEPLOY_DIR}")"
+
+                    if [ ! -d "${DEPLOY_DIR}/.git" ]; then
+                    git clone "${REPO_URL}" "${DEPLOY_DIR}"
+                    fi
+
+                    git -C "${DEPLOY_DIR}" fetch --all --prune
+                    git -C "${DEPLOY_DIR}" checkout "${BUILD_BRANCH}"
+                    git -C "${DEPLOY_DIR}" reset --hard "origin/${BUILD_BRANCH}"
+                    '''
+            }
+        }
+
+        stage('Deploy compose stack') {
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+
+                    cd "${DEPLOY_DIR}"
+
+                    if [ -n "${ECR_REGISTRY}" ]; then
+                    aws ecr get-login-password --region "${AWS_REGION}" | \
+                        docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+                    API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" pull api
+                    fi
+
+                    API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate api
+                    API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" exec -T api alembic upgrade head
+                    API_IMAGE="${DEPLOY_IMAGE}" docker compose -f "${COMPOSE_FILE}" ps api
+                    '''
             }
         }
     }
 
     post {
         success {
-            echo 'Deployment completed successfully.'
+            echo "Deployment completed with image ${env.DEPLOY_IMAGE}"
         }
         failure {
             echo 'Deployment failed. Check stage logs for details.'
