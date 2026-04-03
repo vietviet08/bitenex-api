@@ -17,10 +17,6 @@ pipeline {
 
     environment {
         LOCAL_IMAGE_NAME = 'bitenex-api'
-        DEPLOY_IMAGE = 'bitenex-api:local'
-        IMAGE_TAG = 'develop-local'
-        SHORT_COMMIT = 'unknown'
-        BUILD_BRANCH = 'develop'
         ECR_REGISTRY = '640168447652.dkr.ecr.ap-southeast-1.amazonaws.com'
         ECR_REPOSITORY = 'bitenex-api'
         REPO_URL = 'https://github.com/vietviet08/bitenex-api.git'
@@ -59,25 +55,30 @@ pipeline {
                     def awsRegion = params.AWS_REGION?.trim() ?: env.AWS_REGION
                     def ecrRegistry = params.ECR_REGISTRY?.trim() ?: env.ECR_REGISTRY
                     def ecrRepository = params.ECR_REPOSITORY?.trim() ?: env.ECR_REPOSITORY
+                    def imageTag = "${resolvedBranch}-${env.BUILD_NUMBER}-${shortCommit}"
+                    def deployImage = ecrRegistry ? "${ecrRegistry}/${ecrRepository}:${imageTag}" : "${env.LOCAL_IMAGE_NAME}:local"
 
-                    env.BUILD_BRANCH = resolvedBranch
-                    env.SHORT_COMMIT = shortCommit
-                    env.IMAGE_TAG = "${resolvedBranch}-${env.BUILD_NUMBER}-${shortCommit}"
-                    env.DEPLOY_IMAGE = "${env.LOCAL_IMAGE_NAME}:local"
-                    env.REPO_URL = repoUrl
-                    env.DEPLOY_DIR = deployDir
-                    env.COMPOSE_FILE = composeFile
-                    env.AWS_REGION = awsRegion
-                    env.ECR_REGISTRY = ecrRegistry
-                    env.ECR_REPOSITORY = ecrRepository
                     echo "CHANGE_TARGET=${env.CHANGE_TARGET ?: ''}"
                     echo "BRANCH_NAME=${env.BRANCH_NAME ?: ''}"
                     echo "GIT_BRANCH=${env.GIT_BRANCH ?: ''}"
-                    echo "Deploy branch resolved from Jenkins context: ${env.BUILD_BRANCH}"
-                    echo "Image tag: ${env.IMAGE_TAG}"
-                    echo "AWS region: ${env.AWS_REGION}"
-                    echo "ECR registry: ${env.ECR_REGISTRY ?: '(disabled)'}"
-                    echo "ECR repository: ${env.ECR_REPOSITORY}"
+                    echo "Deploy branch resolved from Jenkins context: ${resolvedBranch}"
+                    echo "Image tag: ${imageTag}"
+                    echo "AWS region: ${awsRegion}"
+                    echo "ECR registry: ${ecrRegistry ?: '(disabled)'}"
+                    echo "ECR repository: ${ecrRepository}"
+
+                    writeFile file: '.jenkins-build.env', text: """LOCAL_IMAGE_NAME=${env.LOCAL_IMAGE_NAME}
+BUILD_BRANCH=${resolvedBranch}
+SHORT_COMMIT=${shortCommit}
+IMAGE_TAG=${imageTag}
+DEPLOY_IMAGE=${deployImage}
+REPO_URL=${repoUrl}
+DEPLOY_DIR=${deployDir}
+COMPOSE_FILE=${composeFile}
+AWS_REGION=${awsRegion}
+ECR_REGISTRY=${ecrRegistry}
+ECR_REPOSITORY=${ecrRepository}
+"""
                 }
             }
         }
@@ -86,6 +87,9 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+                    set -a
+                    . ./.jenkins-build.env
+                    set +a
 
                     : "${LOCAL_IMAGE_NAME:?LOCAL_IMAGE_NAME is required}"
                     : "${IMAGE_TAG:?IMAGE_TAG is required}"
@@ -101,15 +105,11 @@ pipeline {
 
         stage('Push image to ECR') {
             steps {
-                script {
-                    if (env.ECR_REGISTRY?.trim()) {
-                        env.DEPLOY_IMAGE = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.IMAGE_TAG}"
-                    } else {
-                        env.DEPLOY_IMAGE = "${env.LOCAL_IMAGE_NAME}:local"
-                    }
-                }
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+                    set -a
+                    . ./.jenkins-build.env
+                    set +a
 
                     : "${LOCAL_IMAGE_NAME:?LOCAL_IMAGE_NAME is required}"
                     : "${IMAGE_TAG:?IMAGE_TAG is required}"
@@ -133,6 +133,9 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+                    set -a
+                    . ./.jenkins-build.env
+                    set +a
 
                     : "${DEPLOY_DIR:?DEPLOY_DIR is required}"
                     : "${REPO_URL:?REPO_URL is required}"
@@ -156,6 +159,9 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                     set -euo pipefail
+                    set -a
+                    . ./.jenkins-build.env
+                    set +a
 
                     : "${DEPLOY_DIR:?DEPLOY_DIR is required}"
                     : "${COMPOSE_FILE:?COMPOSE_FILE is required}"
@@ -179,7 +185,14 @@ pipeline {
 
     post {
         success {
-            echo "Deployment completed with image ${env.DEPLOY_IMAGE}"
+            script {
+                def deployImage = 'bitenex-api:local'
+                if (fileExists('.jenkins-build.env')) {
+                    def metadata = readProperties text: readFile('.jenkins-build.env')
+                    deployImage = metadata.DEPLOY_IMAGE ?: deployImage
+                }
+                echo "Deployment completed with image ${deployImage}"
+            }
         }
         failure {
             echo 'Deployment failed. Check stage logs for details.'
