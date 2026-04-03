@@ -9,6 +9,8 @@ services:
     restart: always
     env_file:
       - .env
+    volumes:
+      - ./bitenex-89b3e-firebase-adminsdk-fbsvc-34dbe96019.json:/app/firebase-credentials.json:ro
     ports:
       - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"
     deploy:
