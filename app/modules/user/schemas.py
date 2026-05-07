@@ -3,7 +3,7 @@
 # =============================================================================
 
 
-from pydantic import EmailStr, Field
+from pydantic import Field
 
 from app.shared.dto import BaseDTO, TimestampMixin
 from app.shared.enums import Role
@@ -12,7 +12,7 @@ from app.shared.enums import Role
 class UserBase(BaseDTO):
     """Base user fields."""
 
-    email: EmailStr
+    email: str = Field(pattern=r"^.+@.+$", max_length=255)
     full_name: str = Field(min_length=2, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
 
