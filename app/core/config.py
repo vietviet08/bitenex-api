@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     smtp_port: int = 465
     smtp_tls_ssl: bool = True
 
+    # OpenAI / Proxy Embedding Settings
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_chat_model: str = "gpt-4o-mini"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | List[str]) -> List[str]:

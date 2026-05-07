@@ -2,6 +2,9 @@
 # Merchant Module - ORM Models
 # =============================================================================
 
+from typing import List, Optional
+
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -117,6 +120,12 @@ class Merchant(BaseModel):
         nullable=False,
     )
 
+    # Semantic search embedding (pgvector, 1536 dims for text-embedding-3-small)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(1536),
+        nullable=True,
+    )
+
 
 class MerchantCategory(BaseModel):
     """
@@ -191,6 +200,12 @@ class MenuItem(BaseModel):
         Boolean,
         default=False,
         nullable=False,
+    )
+
+    # Semantic search embedding (pgvector, 1536 dims for text-embedding-3-small)
+    embedding: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(1536),
+        nullable=True,
     )
 
 
