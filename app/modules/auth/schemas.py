@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import EmailStr, Field
+from pydantic import Field
 
 from app.shared.dto import BaseDTO
 from app.shared.enums import Role
@@ -9,14 +9,14 @@ from app.shared.enums import Role
 class LoginRequest(BaseDTO):
     """Login request with email and password."""
 
-    email: EmailStr
+    email: str = Field(pattern=r"^.+@.+$", max_length=255)
     password: str = Field(min_length=8, max_length=128)
 
 
 class RegisterRequest(BaseDTO):
     """User registration request."""
 
-    email: EmailStr
+    email: str = Field(pattern=r"^.+@.+$", max_length=255)
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=2, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
@@ -44,7 +44,7 @@ class ChangePasswordRequest(BaseDTO):
 class ResetPasswordRequest(BaseDTO):
     """Password reset request (forgot password flow)."""
 
-    email: EmailStr
+    email: str = Field(pattern=r"^.+@.+$", max_length=255)
 
 
 class ConfirmResetPasswordRequest(BaseDTO):

@@ -47,7 +47,7 @@ def upgrade() -> None:
         [
             {
                 "id": USER_IDS[0],
-                "email": "user@bitenex.local",
+                "email": "user@bitenex.com",
                 "password_hash": PASSWORD_HASH,
                 "full_name": "Test User",
                 "phone": "0902000001",
@@ -59,7 +59,7 @@ def upgrade() -> None:
             },
             {
                 "id": USER_IDS[1],
-                "email": "driver@bitenex.local",
+                "email": "driver@bitenex.com",
                 "password_hash": PASSWORD_HASH,
                 "full_name": "Test Driver",
                 "phone": "0902000002",
@@ -71,7 +71,7 @@ def upgrade() -> None:
             },
             {
                 "id": USER_IDS[2],
-                "email": "admin@bitenex.local",
+                "email": "admin@bitenex.com",
                 "password_hash": PASSWORD_HASH,
                 "full_name": "System Admin",
                 "phone": "0902000003",

@@ -180,7 +180,7 @@ def upgrade() -> None:
         [
             {
                 "id": USER_IDS[0],
-                "email": "merchant.pho@bitenex.local",
+                "email": "merchant.pho@bitenex.com",
                 "password_hash": PASSWORD_HASH,
                 "full_name": "Nguyen Minh Quan",
                 "phone": "0901000001",
@@ -192,7 +192,7 @@ def upgrade() -> None:
             },
             {
                 "id": USER_IDS[1],
-                "email": "merchant.banhmi@bitenex.local",
+                "email": "merchant.banhmi@bitenex.com",
                 "password_hash": PASSWORD_HASH,
                 "full_name": "Tran Ha Linh",
                 "phone": "0901000002",
@@ -204,7 +204,7 @@ def upgrade() -> None:
             },
             {
                 "id": USER_IDS[2],
-                "email": "merchant.comtam@bitenex.local",
+                "email": "merchant.comtam@bitenex.com",
                 "password_hash": PASSWORD_HASH,
                 "full_name": "Le Duc Thang",
                 "phone": "0901000003",
