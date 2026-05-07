@@ -27,6 +27,7 @@ from app.modules.notification.internal_router import internal_router as notifica
 from app.modules.order import router as order_router
 from app.modules.order.internal_router import internal_router as order_internal_router
 from app.modules.payment import router as payment_router
+from app.modules.search.router import router as search_router
 from app.modules.system import router as system_router
 from app.modules.user import router as user_router
 from app.modules.user.internal_router import internal_router as user_internal_router
@@ -125,6 +126,7 @@ app.include_router(payment_router, prefix=API_V1_PREFIX)
 app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(journey_public_router, prefix=API_V1_PREFIX)
 app.include_router(journey_router, prefix=API_V1_PREFIX)
+app.include_router(search_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
 
 # n8n — Internal service routers

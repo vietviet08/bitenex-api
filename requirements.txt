@@ -44,3 +44,5 @@ mypy==1.8.0
 # Utilities
 colorama==0.4.6
 pyfiglet==1.0.4
+openai>=1.14.0
+pgvector>=0.2.5
