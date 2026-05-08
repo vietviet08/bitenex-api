@@ -71,7 +71,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openai_embedding_model: str = "text-embedding-3-small"
-    openai_chat_model: str = "gpt-4o-mini"
+    # LLM model used for semantic query parsing (must be chat-compatible)
+    # Default: aws/claude-haiku-4-5 (fast, cheap, tested on vertex-key.com proxy)
+    openai_chat_model: str = "aws/claude-haiku-4-5"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -1,7 +1,7 @@
 """add pgvector embeddings for semantic search
 
 Revision ID: e1f2a3b4c5d6
-Revises: d4e5f6a7b8c9
+Revises: 334718eb712d
 Create Date: 2026-05-07 12:00:00.000000
 
 Changes:
@@ -17,7 +17,7 @@ from pgvector.sqlalchemy import Vector
 
 # revision identifiers, used by Alembic.
 revision = "e1f2a3b4c5d6"
-down_revision = "d4e5f6a7b8c9"
+down_revision = "334718eb712d"
 branch_labels = None
 depends_on = None
 

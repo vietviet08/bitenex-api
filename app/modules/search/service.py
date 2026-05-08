@@ -1,15 +1,25 @@
 # =============================================================================
-# Semantic Smart Search - Service Layer
+# Semantic Smart Search - Service Layer (LLM-Powered)
 # =============================================================================
 # Architecture:
-#   1. Embed the user's query using OpenAI text-embedding-3-small (via proxy)
-#   2. Run cosine-similarity search against pgvector index on menu_items / merchants
-#   3. Gracefully fall back to ILIKE keyword search if OpenAI is unavailable
+#   1. Parse user's natural language query with LLM (aws/claude-haiku-4-5)
+#      → extract English food keywords, food_types, food_attributes
+#   2. Run multi-term ILIKE search across menu_items and merchants in PostgreSQL
+#   3. Score results by number of keyword matches (relevance ranking)
+#   4. Gracefully fall back to simple ILIKE if LLM is unavailable
+#
+# Why LLM + ILIKE instead of pgvector embedding:
+#   - The proxy (vertex-key.com) has no embedding models available
+#   - LLM query parsing gives true semantic understanding (Vietnamese → English)
+#   - Works with existing PostgreSQL, no vector extension required for search
 # =============================================================================
 
+import json
 import logging
-from typing import List, Optional
+import re
+from typing import List, Optional, Tuple
 
+import httpx
 from openai import AsyncOpenAI, OpenAIError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,13 +36,27 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # ---------------------------------------------------------------------------
-# OpenAI client (singleton, reused across requests)
+# OpenAI / Proxy LLM client
 # ---------------------------------------------------------------------------
 
 _openai_client: Optional[AsyncOpenAI] = None
 
+_LLM_TIMEOUT = 25  # seconds
 
-def _get_openai_client() -> Optional[AsyncOpenAI]:
+_QUERY_PARSER_SYSTEM = """You are a food search assistant for a Vietnamese food delivery app.
+Given a Vietnamese or English natural language query, extract relevant search terms.
+Return ONLY valid JSON (no markdown, no backticks) with these fields:
+- keywords: list of 5-10 English search keywords that describe the food/restaurant
+- food_types: list of specific food names in English related to the query
+- food_attributes: list of attributes (light, hot, spicy, healthy, breakfast, late-night, etc.)
+
+Rules:
+- Always include transliterated Vietnamese food names (banh mi, pho, bun bo, etc.)
+- Think about what Vietnamese foods match the intent
+- Include both specific and general terms"""
+
+
+def _get_llm_client() -> Optional[AsyncOpenAI]:
     """Return a lazily-initialized AsyncOpenAI client configured for the proxy."""
     global _openai_client
     if _openai_client is None:
@@ -42,55 +66,124 @@ def _get_openai_client() -> Optional[AsyncOpenAI]:
         _openai_client = AsyncOpenAI(
             api_key=settings.openai_api_key,
             base_url=settings.openai_base_url,
+            http_client=httpx.AsyncClient(timeout=_LLM_TIMEOUT),
         )
     return _openai_client
 
 
 # ---------------------------------------------------------------------------
-# Embedding helper
+# LLM Query Parser
 # ---------------------------------------------------------------------------
 
 
-async def embed_text(text_input: str) -> Optional[List[float]]:
+async def parse_query_with_llm(query: str) -> Optional[dict]:
     """
-    Generate an embedding vector for the given text using OpenAI API (or proxy).
-    Returns None when the API is unavailable so the caller can fall back gracefully.
+    Use LLM to parse a natural language food query into structured search terms.
+
+    Returns dict with keys: keywords, food_types, food_attributes
+    Returns None on failure (caller should fall back to simple ILIKE).
     """
-    client = _get_openai_client()
+    client = _get_llm_client()
     if client is None:
         return None
 
     try:
-        response = await client.embeddings.create(
-            input=text_input,
-            model=settings.openai_embedding_model,
+        response = await client.chat.completions.create(
+            model=settings.openai_chat_model,
+            messages=[
+                {"role": "system", "content": _QUERY_PARSER_SYSTEM},
+                {"role": "user", "content": f'Query: "{query}"'},
+            ],
+            max_tokens=400,
+            temperature=0,
         )
-        return response.data[0].embedding
-    except OpenAIError as exc:
-        logger.error("[SemanticSearch] OpenAI embedding error: %s", exc)
+        raw = response.choices[0].message.content.strip()
+
+        # Strip markdown code fences if LLM wraps in ```json
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+        parsed = json.loads(raw)
+        logger.info("[SemanticSearch] LLM parsed query %r → %s", query, parsed)
+        return parsed
+
+    except (OpenAIError, json.JSONDecodeError, KeyError) as exc:
+        logger.warning("[SemanticSearch] LLM parse failed: %s", exc)
         return None
     except Exception as exc:
-        logger.error("[SemanticSearch] Unexpected embedding error: %s", exc)
+        logger.error("[SemanticSearch] Unexpected LLM error: %s", exc)
         return None
 
 
+def _build_search_terms(query: str, parsed: Optional[dict]) -> List[str]:
+    """
+    Combine original query words + LLM-parsed terms into a flat list of search terms.
+    Deduplicates and normalises to lowercase.
+    """
+    terms: List[str] = []
+
+    # Always include original query words (handles direct matches like "Bánh mì")
+    terms.extend(query.lower().split())
+
+    if parsed:
+        for key in ("keywords", "food_types", "food_attributes"):
+            items = parsed.get(key, [])
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, str):
+                        # Split multi-word terms as well
+                        terms.extend(item.lower().split())
+
+    # Deduplicate preserving order
+    seen = set()
+    unique: List[str] = []
+    for t in terms:
+        t = t.strip().strip(",.;:")
+        if t and t not in seen and len(t) > 1:
+            seen.add(t)
+            unique.append(t)
+
+    return unique
+
+
 # ---------------------------------------------------------------------------
-# Vector similarity search
+# Multi-term ILIKE search
 # ---------------------------------------------------------------------------
 
 
-async def _search_foods_by_vector(
+def _score_row(name: str, description: Optional[str], terms: List[str]) -> float:
+    """
+    Calculate a relevance score (0-1) based on how many search terms match
+    the item's name and description.
+    """
+    text_blob = f"{name} {description or ''}".lower()
+    matches = sum(1 for t in terms if t in text_blob)
+    # Normalise: max score at 5+ matches → 1.0
+    return min(1.0, matches / max(1, min(5, len(terms))))
+
+
+async def _search_foods_llm(
     db: AsyncSession,
-    query_vector: List[float],
+    terms: List[str],
     limit: int,
 ) -> List[SemanticSearchResult]:
     """
-    Use pgvector cosine distance to find menu items semantically similar to the query.
-    Joins with merchants table to include restaurant name.
+    Search menu_items using multi-term OR ILIKE, then score and rank by match count.
     """
-    vector_literal = f"[{','.join(str(v) for v in query_vector)}]"
+    if not terms:
+        return []
+
+    # Build dynamic OR conditions for each term across name + description
+    conditions = []
+    params: dict = {}
+    for i, term in enumerate(terms[:20]):  # cap at 20 terms
+        params[f"t{i}"] = f"%{term}%"
+        conditions.append(f"(LOWER(mi.name) LIKE :t{i} OR LOWER(mi.description) LIKE :t{i})")
+
+    where_clause = " OR ".join(conditions)
+
     sql = text(
-        """
+        f"""
         SELECT
             mi.id,
             mi.name,
@@ -98,47 +191,63 @@ async def _search_foods_by_vector(
             mi.price,
             mi.image_url,
             mi.merchant_id,
-            m.name AS merchant_name,
-            1 - (mi.embedding <=> :query_vec ::vector) AS similarity
+            m.name AS merchant_name
         FROM menu_items mi
         JOIN merchants m ON mi.merchant_id = m.id
-        WHERE mi.embedding IS NOT NULL
-          AND mi.is_available = true
+        WHERE mi.is_available = true
           AND mi.is_deleted = false
-        ORDER BY mi.embedding <=> :query_vec ::vector
+          AND ({where_clause})
         LIMIT :limit
         """
     )
-    result = await db.execute(sql, {"query_vec": vector_literal, "limit": limit})
+    params["limit"] = limit * 3  # fetch more to re-rank
+
+    result = await db.execute(sql, params)
     rows = result.fetchall()
 
-    return [
-        SemanticSearchResult(
-            id=row.id,
-            type=SearchType.FOOD,
-            name=row.name,
-            description=row.description,
-            match_score=round(max(0.0, float(row.similarity)), 4),
-            price=row.price,
-            image_url=row.image_url,
-            merchant_id=row.merchant_id,
-            merchant_name=row.merchant_name,
+    results = []
+    for row in rows:
+        score = _score_row(row.name, row.description, terms)
+        results.append(
+            SemanticSearchResult(
+                id=row.id,
+                type=SearchType.FOOD,
+                name=row.name,
+                description=row.description,
+                match_score=round(score, 4),
+                price=row.price,
+                image_url=row.image_url,
+                merchant_id=row.merchant_id,
+                merchant_name=row.merchant_name,
+            )
         )
-        for row in rows
-    ]
+
+    # Sort by match score descending
+    results.sort(key=lambda r: r.match_score, reverse=True)
+    return results[:limit]
 
 
-async def _search_restaurants_by_vector(
+async def _search_restaurants_llm(
     db: AsyncSession,
-    query_vector: List[float],
+    terms: List[str],
     limit: int,
 ) -> List[SemanticSearchResult]:
-    """
-    Use pgvector cosine distance to find restaurants semantically similar to the query.
-    """
-    vector_literal = f"[{','.join(str(v) for v in query_vector)}]"
+    """Search merchants using multi-term OR ILIKE."""
+    if not terms:
+        return []
+
+    conditions = []
+    params: dict = {}
+    for i, term in enumerate(terms[:20]):
+        params[f"t{i}"] = f"%{term}%"
+        conditions.append(
+            f"(LOWER(m.name) LIKE :t{i} OR LOWER(m.description) LIKE :t{i} OR LOWER(m.address) LIKE :t{i})"
+        )
+
+    where_clause = " OR ".join(conditions)
+
     sql = text(
-        """
+        f"""
         SELECT
             m.id,
             m.name,
@@ -146,46 +255,51 @@ async def _search_restaurants_by_vector(
             m.address,
             m.average_rating,
             m.delivery_fee,
-            m.estimated_prep_time,
-            1 - (m.embedding <=> :query_vec ::vector) AS similarity
+            m.estimated_prep_time
         FROM merchants m
-        WHERE m.embedding IS NOT NULL
-          AND m.status = 'ACTIVE'
+        WHERE m.status = 'ACTIVE'
           AND m.is_deleted = false
-        ORDER BY m.embedding <=> :query_vec ::vector
+          AND ({where_clause})
         LIMIT :limit
         """
     )
-    result = await db.execute(sql, {"query_vec": vector_literal, "limit": limit})
+    params["limit"] = limit * 3
+
+    result = await db.execute(sql, params)
     rows = result.fetchall()
 
-    return [
-        SemanticSearchResult(
-            id=row.id,
-            type=SearchType.RESTAURANT,
-            name=row.name,
-            description=row.description,
-            match_score=round(max(0.0, float(row.similarity)), 4),
-            address=row.address,
-            average_rating=row.average_rating,
-            delivery_fee=row.delivery_fee,
-            estimated_prep_time=row.estimated_prep_time,
+    results = []
+    for row in rows:
+        score = _score_row(row.name, row.description, terms)
+        results.append(
+            SemanticSearchResult(
+                id=row.id,
+                type=SearchType.RESTAURANT,
+                name=row.name,
+                description=row.description,
+                match_score=round(score, 4),
+                address=row.address,
+                average_rating=row.average_rating,
+                delivery_fee=row.delivery_fee,
+                estimated_prep_time=row.estimated_prep_time,
+            )
         )
-        for row in rows
-    ]
+
+    results.sort(key=lambda r: r.match_score, reverse=True)
+    return results[:limit]
 
 
 # ---------------------------------------------------------------------------
-# ILIKE keyword fallback (when OpenAI is unavailable)
+# Simple fallback: pure ILIKE on original query
 # ---------------------------------------------------------------------------
 
 
-async def _search_foods_by_keyword(
+async def _search_foods_simple(
     db: AsyncSession,
     query: str,
     limit: int,
 ) -> List[SemanticSearchResult]:
-    """Keyword fallback using PostgreSQL ILIKE — no vector needed."""
+    """Dead-simple fallback: single ILIKE on the raw query string."""
     pattern = f"%{query}%"
     stmt = (
         select(MenuItem, Merchant.name.label("merchant_name"))
@@ -199,14 +313,13 @@ async def _search_foods_by_keyword(
     )
     result = await db.execute(stmt)
     rows = result.fetchall()
-
     return [
         SemanticSearchResult(
             id=row.MenuItem.id,
             type=SearchType.FOOD,
             name=row.MenuItem.name,
             description=row.MenuItem.description,
-            match_score=0.5,  # static score for keyword fallback
+            match_score=0.5,
             price=row.MenuItem.price,
             image_url=row.MenuItem.image_url,
             merchant_id=row.MenuItem.merchant_id,
@@ -216,12 +329,11 @@ async def _search_foods_by_keyword(
     ]
 
 
-async def _search_restaurants_by_keyword(
+async def _search_restaurants_simple(
     db: AsyncSession,
     query: str,
     limit: int,
 ) -> List[SemanticSearchResult]:
-    """Keyword fallback for restaurants."""
     pattern = f"%{query}%"
     stmt = (
         select(Merchant)
@@ -234,7 +346,6 @@ async def _search_restaurants_by_keyword(
     )
     result = await db.execute(stmt)
     merchants = result.scalars().all()
-
     return [
         SemanticSearchResult(
             id=m.id,
@@ -261,45 +372,51 @@ async def semantic_search(
     query: str,
     limit: int = 10,
     search_type: SearchType = SearchType.ALL,
-) -> tuple[List[SemanticSearchResult], bool]:
+) -> Tuple[List[SemanticSearchResult], bool]:
     """
-    Perform semantic search using vector embeddings with ILIKE fallback.
+    Perform LLM-powered semantic search with ILIKE fallback.
+
+    Flow:
+      1. Send query to LLM → get structured keywords
+      2. Build multi-term search against menu_items / merchants
+      3. Score results by match count, return ranked list
+      4. If LLM fails → fall back to simple ILIKE on raw query
 
     Returns:
         (results, used_fallback)
-        used_fallback=True when OpenAI was unavailable and ILIKE was used instead.
     """
-    query_vector = await embed_text(query)
-    used_fallback = query_vector is None
+    # Step 1: Try LLM parsing
+    parsed = await parse_query_with_llm(query)
+    used_fallback = parsed is None
+
+    food_results: List[SemanticSearchResult] = []
+    restaurant_results: List[SemanticSearchResult] = []
 
     if used_fallback:
-        logger.info("[SemanticSearch] Using keyword fallback for query: %r", query)
-        food_results: List[SemanticSearchResult] = []
-        restaurant_results: List[SemanticSearchResult] = []
-
+        # Simple ILIKE fallback on raw query
+        logger.info("[SemanticSearch] LLM unavailable — simple ILIKE fallback for: %r", query)
         if search_type in (SearchType.ALL, SearchType.FOOD):
-            food_results = await _search_foods_by_keyword(db, query, limit)
+            food_results = await _search_foods_simple(db, query, limit)
         if search_type in (SearchType.ALL, SearchType.RESTAURANT):
-            restaurant_results = await _search_restaurants_by_keyword(db, query, limit)
+            restaurant_results = await _search_restaurants_simple(db, query, limit)
     else:
-        logger.info("[SemanticSearch] Vector search for query: %r", query)
-        food_results = []
-        restaurant_results = []
+        # LLM-powered multi-term search
+        terms = _build_search_terms(query, parsed)
+        logger.info("[SemanticSearch] Terms for %r: %s", query, terms[:10])
 
         if search_type in (SearchType.ALL, SearchType.FOOD):
-            food_results = await _search_foods_by_vector(db, query_vector, limit)
+            food_results = await _search_foods_llm(db, terms, limit)
         if search_type in (SearchType.ALL, SearchType.RESTAURANT):
-            restaurant_results = await _search_restaurants_by_vector(db, query_vector, limit)
+            restaurant_results = await _search_restaurants_llm(db, terms, limit)
 
-    # Merge and sort by match_score descending
+    # Merge and sort
     all_results = food_results + restaurant_results
     all_results.sort(key=lambda r: r.match_score, reverse=True)
-
     return all_results[:limit], used_fallback
 
 
 # ---------------------------------------------------------------------------
-# Indexing: build embeddings for existing data
+# Indexing (kept for future pgvector use, no-op for now)
 # ---------------------------------------------------------------------------
 
 
@@ -308,96 +425,38 @@ async def index_menu_items(
     batch_size: int = 50,
 ) -> IndexingResponse:
     """
-    Generate and store embeddings for all menu items that don't yet have one.
-    Should be called once after migration and then on every new item upsert.
+    Placeholder: embedding indexing is not used with the current LLM-based approach.
+    Will be activated when an embedding model becomes available on the proxy.
     """
-    client = _get_openai_client()
-    if client is None:
-        return IndexingResponse(
-            message="OpenAI not configured — indexing skipped",
-            failed=0,
-        )
-
-    # Fetch items without embedding
-    stmt = (
-        select(MenuItem)
-        .where(
-            MenuItem.embedding == None,  # noqa: E711
-            MenuItem.is_deleted == False,  # noqa: E712
-        )
-        .limit(batch_size)
+    return IndexingResponse(
+        message=(
+            "LLM-based semantic search is active — embedding indexing not required. "
+            "Embeddings will be used when an embedding model is available on the proxy."
+        ),
+        indexed_menu_items=0,
+        indexed_merchants=0,
+        failed=0,
     )
-    result = await db.execute(stmt)
-    items: List[MenuItem] = list(result.scalars().all())
-
-    indexed = 0
-    failed = 0
-
-    for item in items:
-        text_for_embedding = _build_menu_item_text(item)
-        vector = await embed_text(text_for_embedding)
-        if vector:
-            item.embedding = vector
-            indexed += 1
-        else:
-            failed += 1
-
-    await db.flush()
-    logger.info("[SemanticSearch] Indexed %d menu items (%d failed)", indexed, failed)
-    return IndexingResponse(indexed_menu_items=indexed, failed=failed)
 
 
 async def index_merchants(
     db: AsyncSession,
     batch_size: int = 50,
 ) -> IndexingResponse:
-    """Generate and store embeddings for merchants without one."""
-    client = _get_openai_client()
-    if client is None:
-        return IndexingResponse(
-            message="OpenAI not configured — indexing skipped",
-            failed=0,
-        )
-
-    stmt = (
-        select(Merchant)
-        .where(
-            Merchant.embedding == None,  # noqa: E711
-            Merchant.is_deleted == False,  # noqa: E712
-            Merchant.status == "ACTIVE",
-        )
-        .limit(batch_size)
+    return IndexingResponse(
+        message="LLM-based search active — embedding indexing not required.",
+        indexed_menu_items=0,
+        indexed_merchants=0,
+        failed=0,
     )
-    result = await db.execute(stmt)
-    merchants: List[Merchant] = list(result.scalars().all())
-
-    indexed = 0
-    failed = 0
-
-    for m in merchants:
-        text_for_embedding = _build_merchant_text(m)
-        vector = await embed_text(text_for_embedding)
-        if vector:
-            m.embedding = vector
-            indexed += 1
-        else:
-            failed += 1
-
-    await db.flush()
-    logger.info("[SemanticSearch] Indexed %d merchants (%d failed)", indexed, failed)
-    return IndexingResponse(indexed_merchants=indexed, failed=failed)
 
 
 # ---------------------------------------------------------------------------
-# Text builders: create rich text representation for embedding
+# Text builders (kept for future embedding use)
 # ---------------------------------------------------------------------------
 
 
 def _build_menu_item_text(item: MenuItem) -> str:
-    """
-    Construct a rich text string for embedding a menu item.
-    More descriptive text → better semantic matches.
-    """
     parts = [f"Món ăn: {item.name}"]
     if item.description:
         parts.append(f"Mô tả: {item.description}")
@@ -409,12 +468,9 @@ def _build_menu_item_text(item: MenuItem) -> str:
 
 
 def _build_merchant_text(merchant: Merchant) -> str:
-    """Construct a rich text string for embedding a merchant/restaurant."""
     parts = [f"Nhà hàng: {merchant.name}"]
     if merchant.description:
         parts.append(f"Mô tả: {merchant.description}")
     if merchant.address:
         parts.append(f"Địa chỉ: {merchant.address}")
-    if merchant.city:
-        parts.append(f"Thành phố: {merchant.city}")
     return " | ".join(parts)
