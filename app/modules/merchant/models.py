@@ -285,3 +285,106 @@ class MenuItemOption(BaseModel):
         default=True,
         nullable=False,
     )
+
+
+class MerchantReview(BaseModel):
+    """
+    Customer review for a merchant, submitted after order delivery.
+    Drives the AI Review Summarizer feature.
+    """
+
+    __tablename__ = "merchant_reviews"
+
+    merchant_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+    )
+
+    order_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+        index=True,
+    )
+
+    # Rating 1-5
+    rating: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    # Free-text review
+    comment: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Merchant reply to the review
+    reply: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Reviewer display name (snapshot at review time)
+    reviewer_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    reviewer_avatar: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+
+class MerchantReviewSummaryCache(BaseModel):
+    """
+    Stores LLM-generated AI summary for a merchant's reviews.
+    Acts as a 24-hour cache to avoid repeated LLM calls.
+    """
+
+    __tablename__ = "merchant_review_summary_cache"
+
+    merchant_id: Mapped[str] = mapped_column(
+        String(36),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    # Serialized JSON list: ["Nước dùng ngon", "Phục vụ nhanh"]
+    pros_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cons_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    overall_sentiment: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )  # positive | neutral | negative
+
+    # Full one-sentence summary in Vietnamese
+    summary_vi: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Snapshot stats at time of generation
+    total_reviews_analyzed: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    average_rating_snapshot: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    # Cache validity — invalidated when new review arrives
+    is_valid: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )

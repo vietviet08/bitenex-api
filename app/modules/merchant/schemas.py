@@ -210,3 +210,57 @@ class MenuItemDetailResponse(MenuItemBase, TimestampMixin):
     image_url: str | None = None
     is_featured: bool
     option_groups: list[OptionGroupResponse] = []
+
+
+# =============================================================================
+# Review Schemas — AI Review Summarizer feature
+# =============================================================================
+
+
+class ReviewResponse(BaseDTO, TimestampMixin):
+    """Single merchant review."""
+
+    id: str
+    merchant_id: str
+    user_id: str
+    order_id: str | None = None
+    rating: int
+    comment: str | None = None
+    reply: str | None = None
+    reviewer_name: str | None = None
+    reviewer_avatar: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewListResponse(BaseDTO):
+    """Paginated review list with aggregate statistics."""
+
+    items: list[ReviewResponse]
+    total: int
+    page: int
+    per_page: int
+    average_rating: float
+    rating_distribution: dict[str, int]  # {"1": 2, "2": 0, "3": 1, "4": 5, "5": 8}
+
+
+class ReviewSummaryResponse(BaseDTO):
+    """
+    AI-generated review summary for a merchant.
+    Returned by GET /merchants/{id}/reviews/ai-summary
+    """
+
+    merchant_id: str
+    merchant_name: str
+    total_reviews_analyzed: int
+    average_rating: float
+    overall_sentiment: str  # positive | neutral | negative
+
+    # LLM-generated content
+    pros: list[str]
+    cons: list[str]
+    summary_vi: str  # One-sentence Vietnamese summary
+
+    # Cache metadata
+    is_cached: bool
+    cached_at: object | None = None  # datetime when summary was generated/cached

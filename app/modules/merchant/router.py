@@ -24,6 +24,8 @@ from app.modules.merchant.schemas import (
     OptionGroupUpdate,
     OptionResponse,
     OptionUpdate,
+    ReviewListResponse,
+    ReviewSummaryResponse,
 )
 from app.modules.merchant.service import MerchantService
 from app.shared.dto import MessageResponse
@@ -449,3 +451,59 @@ async def get_menu_item_detail(
 ) -> MenuItemDetailResponse:
     """Get a single menu item with option groups and options."""
     return await service.get_menu_item_detail(merchant_id, item_id)
+
+
+# =============================================================================
+# Review Endpoints — AI Review Summarizer feature
+# =============================================================================
+@router.get(
+    "/{merchant_id}/reviews",
+    response_model=ReviewListResponse,
+    summary="List merchant reviews",
+)
+async def list_merchant_reviews(
+    merchant_id: str,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> ReviewListResponse:
+    """
+    List paginated reviews for a merchant.
+
+    Returns reviews sorted by newest first, with aggregate stats:
+    - average_rating
+    - rating_distribution (count per star level)
+    """
+    from app.modules.merchant.review_service import list_reviews
+
+    return await list_reviews(db, merchant_id, page=page, per_page=per_page)
+
+
+@router.get(
+    "/{merchant_id}/reviews/ai-summary",
+    response_model=ReviewSummaryResponse,
+    summary="AI-powered review summary",
+)
+async def get_review_ai_summary(
+    merchant_id: str,
+    force_refresh: bool = Query(
+        False,
+        description="Force regenerate summary even if cached (uses LLM credits)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> ReviewSummaryResponse:
+    """
+    Get an AI-generated pros/cons summary of all reviews for a merchant.
+
+    Uses LLM (aws/claude-haiku-4-5) to analyze reviews and return:
+    - pros: list of strengths (Vietnamese)
+    - cons: list of weaknesses (Vietnamese)
+    - summary_vi: one-sentence Vietnamese summary
+    - overall_sentiment: positive | neutral | negative
+
+    Results are cached in DB. Cache is invalidated when new reviews arrive.
+    Use ?force_refresh=true to bypass cache (costs LLM tokens).
+    """
+    from app.modules.merchant.review_service import get_ai_summary
+
+    return await get_ai_summary(db, merchant_id, force_refresh=force_refresh)
