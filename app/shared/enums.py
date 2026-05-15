@@ -113,7 +113,17 @@ class DispatchStrategy(str, Enum):
     ROUND_ROBIN = "ROUND_ROBIN"  # Fair distribution
     MANUAL = "MANUAL"  # Manual assignment
 
+class VoucherType(str, Enum):
+    FIXED_AMOUNT = "FIXED_AMOUNT"      
+    PERCENTAGE = "PERCENTAGE"          
+    FREE_SHIPPING = "FREE_SHIPPING"    
 
+
+class VoucherStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    EXPIRED = "EXPIRED"
+    USED_UP = "USED_UP"
 class WebhookEvent(str, Enum):
     """
     N8n Workflow Webhook trigger paths.
