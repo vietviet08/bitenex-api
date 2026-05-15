@@ -28,7 +28,8 @@ class OrderStatus(str, Enum):
     DELIVERED = "DELIVERED"  # Successfully delivered
     CANCELLED = "CANCELLED"  # Order cancelled
     REFUNDED = "REFUNDED"  # Order refunded
-
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    FAILED_DELIVERY = "FAILED_DELIVERY"
 
 class PaymentStatus(str, Enum):
     """
