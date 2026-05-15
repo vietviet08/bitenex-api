@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from pydantic import Field
+from transformers import Optional
 
 from app.modules.base import BaseModel
 from app.shared.dto import BaseDTO, TimestampMixin
@@ -95,13 +96,16 @@ class AdminVoucherListResponse(BaseDTO):
     total: int
     page: int
     per_page: int
-class VoucherApplyRequest(BaseModel):
+
+class VoucherApplyRequest(BaseDTO):
     code: str = Field(..., min_length=3, max_length=50)
     order_subtotal: Decimal = Field(..., gt=0)
 
 
-class VoucherApplyResponse(BaseModel):
+class VoucherApplyResponse(BaseDTO):
+    success: bool
     voucher_code: str
     discount_amount: Decimal
     final_amount: Decimal
     message: str
+    voucher_id: Optional[int] = None
