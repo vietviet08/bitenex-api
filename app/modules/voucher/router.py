@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser
+from app.modules.user.models import User
 from app.modules.voucher.schemas import (
+    VoucherApplyRequest,
     VoucherListResponse,
     VoucherResponse,
     VoucherValidateRequest,
@@ -85,3 +87,15 @@ async def validate_voucher(
         user_id=user.user_id,
         cart_value=data.cart_value,
     )
+async def apply_voucher(
+    request: VoucherApplyRequest,
+    current_user: User = Depends(get_current_active_user), # type: ignore
+    service: VoucherService = Depends(get_voucher_service)
+):
+    
+    result = await service.validate_and_use_voucher(
+        code=request.code,
+        order_subtotal=request.order_subtotal,
+        user_id=current_user.id
+    )
+    return result

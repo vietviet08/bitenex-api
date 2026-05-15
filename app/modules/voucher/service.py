@@ -344,5 +344,54 @@ class VoucherService:
             "voucher_code": voucher.code,
             "discount_amount": round(discount, 2),
             "final_amount": round(order_subtotal - discount, 2),
-            "message": "Áp dụng voucher thành công"
+            "message": "applied successfully",
         }
+    async def validate_and_use_voucher(self, code: str, order_subtotal: Decimal, user_id: int):
+        """Test + Use voucher - for checkout flow."""
+        voucher = await self.repository.get_by_code(code)
+        if not voucher:
+            raise RequestException("Voucher not found")
+
+        
+        if not voucher.is_active or voucher.status != VoucherStatus.ACTIVE.value:
+            raise RequestException("Voucher not available")
+
+        
+        now = datetime.utcnow()
+        if voucher.start_date > now or voucher.end_date < now:
+            raise RequestException("Voucher has expired")
+
+        
+        if order_subtotal < voucher.min_order_value:
+            raise RequestException(f"Order total must be at least {voucher.min_order_value}đ")
+
+        
+        if voucher.used_count >= voucher.total_usage_limit:
+            raise RequestException("Voucher has reached its usage limit")
+
+        
+        user_voucher = await self.repository.get_user_voucher(user_id, voucher.id)
+        if user_voucher and user_voucher.times_used >= voucher.per_user_limit:
+            raise RequestException("You have used this voucher too many times")
+
+        
+        discount = self._calculate_discount(voucher, order_subtotal)
+
+        return {
+            "success": True,
+            "voucher_code": voucher.code,
+            "discount_amount": discount,
+            "final_amount": order_subtotal - discount,
+            "voucher_id": voucher.id
+        }
+
+
+    def _calculate_discount(self, voucher, order_subtotal: Decimal) -> Decimal:
+        if voucher.type == VoucherType.FIXED_AMOUNT.value:
+            return min(voucher.value, order_subtotal)
+        elif voucher.type == VoucherType.PERCENTAGE.value:
+            discount = order_subtotal * (voucher.value / Decimal("100"))
+            if voucher.max_discount:
+                discount = min(discount, voucher.max_discount)
+            return discount
+        return Decimal("0")
