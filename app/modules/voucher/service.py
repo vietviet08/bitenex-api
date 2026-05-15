@@ -395,3 +395,5 @@ class VoucherService:
                 discount = min(discount, voucher.max_discount)
             return discount
         return Decimal("0")
+    async def use_voucher_after_order(self, voucher_id: int, user_id: int):
+        await self.repository.increase_usage(voucher_id, user_id)
