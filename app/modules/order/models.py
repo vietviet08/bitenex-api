@@ -4,6 +4,7 @@
 
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from transformers import Optional
 
 from app.modules.base import BaseModel
 from app.shared.enums import OrderStatus
@@ -51,7 +52,12 @@ class Order(BaseModel):
         nullable=False,
         index=True,
     )
-
+    status_reason: Optional[str] = Field(
+        default=None, 
+        max_length=255,
+        description="Lý do thay đổi trạng thái"
+    )
+    
     # Pricing
     subtotal: Mapped[float] = mapped_column(Float, nullable=False)
     delivery_fee: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
