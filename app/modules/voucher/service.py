@@ -4,8 +4,6 @@
 
 from datetime import datetime, timedelta, timezone
 
-from polars import Decimal
-from requests import RequestException
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +16,7 @@ from app.modules.voucher.schemas import (
     VoucherUpdateRequest,
     VoucherValidateResponse,
 )
-from app.shared.enums import VoucherStatus, VoucherType
+from app.shared.enums import VoucherStatus
 
 
 class VoucherService:
@@ -311,38 +309,3 @@ class VoucherService:
             created_at=voucher.created_at,
             updated_at=voucher.updated_at,
         )
-    async def apply_voucher(self, code: str, order_subtotal: Decimal, user_id: int) -> dict:
-        
-        voucher = await self.repository.get_by_code(code)
-        
-        if not voucher or not voucher.is_active:
-            raise BadRequestException("Voucher không tồn tại hoặc không khả dụng") # type: ignore
-        
-        if voucher.status != VoucherStatus.ACTIVE.value:
-            raise BadRequestException("Voucher không còn hiệu lực") # pyright: ignore[reportUndefinedVariable]
-        
-        
-        now = datetime.utcnow()
-        if voucher.start_date > now or voucher.end_date < now:
-            raise RequestException("Voucher đã hết hạn")
-
-        
-        if order_subtotal < voucher.min_order_value:
-            raise RequestException(f"Đơn hàng tối thiểu {voucher.min_order_value} để dùng voucher")
-
-        
-        if voucher.type == VoucherType.FIXED_AMOUNT.value:
-            discount = min(voucher.value, order_subtotal)
-        elif voucher.type == VoucherType.PERCENTAGE.value:
-            discount = order_subtotal * (voucher.value / 100)
-            if voucher.max_discount:
-                discount = min(discount, voucher.max_discount)
-        else:
-            discount = Decimal("0")
-
-        return {
-            "voucher_code": voucher.code,
-            "discount_amount": round(discount, 2),
-            "final_amount": round(order_subtotal - discount, 2),
-            "message": "Áp dụng voucher thành công"
-        }
