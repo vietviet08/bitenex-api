@@ -474,8 +474,6 @@ class OrderService:
             )
 
         order.status = new_status.value
-        order.status_reason = data.reason
-        order.updated_at = datetime.utcnow()
         self.db.add(
             OrderStatusHistory(
                 order_id=order.id,
