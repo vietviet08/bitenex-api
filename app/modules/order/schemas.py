@@ -3,7 +3,6 @@
 # =============================================================================
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import Field
 
@@ -62,7 +61,7 @@ class OrderStatusUpdate(BaseDTO):
 
     status: OrderStatus
     reason: str | None = None
-    estimated_delivery_time: Optional[datetime] = None
+
 
 class OrderResponse(BaseDTO, TimestampMixin):
     """Order response."""
