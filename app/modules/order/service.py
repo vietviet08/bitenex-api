@@ -735,17 +735,23 @@ class OrderService:
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
 
-        def _validate_status_transition(self, current: str, new: str) -> bool:
-            """Cải tiến state machine - chặt chẽ hơn"""
-        allowed_transitions = {
-            OrderStatus.PENDING.value: [OrderStatus.CONFIRMED.value, OrderStatus.CANCELLED.value],
-            OrderStatus.CONFIRMED.value: [OrderStatus.PREPARING.value, OrderStatus.CANCELLED.value],
-            OrderStatus.PREPARING.value: [OrderStatus.READY.value, OrderStatus.CANCELLED.value],
-            OrderStatus.READY.value: [OrderStatus.PICKING_UP.value, OrderStatus.CANCELLED.value],
-            OrderStatus.PICKING_UP.value: [OrderStatus.OUT_FOR_DELIVERY.value, OrderStatus.DELIVERING.value],
-            OrderStatus.OUT_FOR_DELIVERY.value: [OrderStatus.DELIVERING.value],
-            OrderStatus.DELIVERING.value: [OrderStatus.DELIVERED.value, OrderStatus.FAILED_DELIVERY.value],
-            OrderStatus.FAILED_DELIVERY.value: [OrderStatus.CANCELLED.value, OrderStatus.REFUNDED.value],
+    def _validate_status_transition(
+        self,
+        current: OrderStatus,
+        new: OrderStatus,
+    ) -> bool:
+        """Validate if status transition is allowed."""
+        # Define allowed transitions
+        allowed_transitions: dict[OrderStatus, list[OrderStatus]] = {
+            OrderStatus.PENDING: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+            OrderStatus.CONFIRMED: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
+            OrderStatus.PREPARING: [OrderStatus.READY, OrderStatus.CANCELLED],
+            OrderStatus.READY: [OrderStatus.PICKING_UP, OrderStatus.CANCELLED],
+            OrderStatus.PICKING_UP: [OrderStatus.DELIVERING],
+            OrderStatus.DELIVERING: [OrderStatus.DELIVERED],
+            OrderStatus.DELIVERED: [],
+            OrderStatus.CANCELLED: [OrderStatus.REFUNDED],
+            OrderStatus.REFUNDED: [],
         }
-        
+
         return new in allowed_transitions.get(current, [])
