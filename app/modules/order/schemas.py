@@ -101,9 +101,28 @@ class OrderTrackingResponse(BaseDTO):
     delivery_latitude: float | None = None
     delivery_longitude: float | None = None
     driver_id: str | None = None
+    driver_name: str | None = None
+    driver_avatar_url: str | None = None
+    driver_average_rating: float | None = None
+    driver_total_deliveries: int | None = None
     driver_latitude: float | None = None
     driver_longitude: float | None = None
     updated_at: datetime | None = None
+
+
+class DriverRatingCreate(BaseDTO):
+    """Submit driver rating for a delivered order."""
+
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = None
+    tip_amount: float = Field(default=0.0, ge=0)
+
+
+class MerchantRatingCreate(BaseDTO):
+    """Submit merchant/food rating for a delivered order."""
+
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = None
 
 
 class AdminOrderListItem(BaseDTO, TimestampMixin):

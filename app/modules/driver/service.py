@@ -2,21 +2,27 @@
 # Driver Module - Service Layer
 # =============================================================================
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.driver.models import Driver, DriverLocation
+from app.modules.driver.models import Driver, DriverLocation, DriverReview
 from app.modules.driver.schemas import (
     DriverCreate,
+    DriverEarningActivityResponse,
+    DriverEarningsResponse,
     DriverLocationUpdate,
+    DriverRatingSummaryResponse,
+    DriverReviewResponse,
     DriverResponse,
     DriverStatusUpdate,
     DriverUpdate,
     NearbyDriverResponse,
 )
+from app.modules.merchant.models import Merchant
 from app.modules.order.models import Order
+from app.modules.user.models import User
 from app.realtime import connection_manager
 from app.realtime.events import RealtimeEventType
 from app.shared.enums import DriverStatus, OrderStatus
@@ -57,6 +63,174 @@ class DriverService:
         if driver is None:
             return None
         return DriverResponse.model_validate(driver)
+
+    async def get_rating_summary(
+        self,
+        driver_id: str,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> DriverRatingSummaryResponse:
+        """Get rating aggregate and recent feedback for a driver."""
+        count_stmt = select(func.count()).where(
+            DriverReview.driver_id == driver_id,
+            DriverReview.is_deleted.is_(False),
+        )
+        total = (await self.db.execute(count_stmt)).scalar_one()
+
+        avg_stmt = select(func.avg(DriverReview.rating)).where(
+            DriverReview.driver_id == driver_id,
+            DriverReview.is_deleted.is_(False),
+        )
+        average = (await self.db.execute(avg_stmt)).scalar_one_or_none() or 0.0
+
+        dist_stmt = (
+            select(DriverReview.rating, func.count())
+            .where(
+                DriverReview.driver_id == driver_id,
+                DriverReview.is_deleted.is_(False),
+            )
+            .group_by(DriverReview.rating)
+        )
+        distribution = {str(rating): 0 for rating in range(1, 6)}
+        for rating, count in (await self.db.execute(dist_stmt)).fetchall():
+            distribution[str(rating)] = count
+
+        rows = (
+            (
+                await self.db.execute(
+                    select(DriverReview, Order.order_number)
+                    .join(Order, Order.id == DriverReview.order_id)
+                    .where(
+                        DriverReview.driver_id == driver_id,
+                        DriverReview.is_deleted.is_(False),
+                    )
+                    .order_by(DriverReview.created_at.desc())
+                    .offset((page - 1) * per_page)
+                    .limit(per_page)
+                )
+            )
+            .all()
+        )
+
+        feedback = [
+            DriverReviewResponse(
+                id=review.id,
+                driver_id=review.driver_id,
+                user_id=review.user_id,
+                order_id=review.order_id,
+                order_number=order_number,
+                rating=review.rating,
+                comment=review.comment,
+                tip_amount=review.tip_amount,
+                reviewer_name=review.reviewer_name,
+                reviewer_avatar=review.reviewer_avatar,
+                created_at=review.created_at,
+                updated_at=review.updated_at,
+            )
+            for review, order_number in rows
+        ]
+
+        return DriverRatingSummaryResponse(
+            average_rating=round(float(average), 2),
+            total_ratings=total,
+            rating_distribution=distribution,
+            recent_feedback=feedback,
+        )
+
+    async def get_earnings(
+        self,
+        driver_id: str,
+        period: str = "week",
+    ) -> DriverEarningsResponse:
+        """Get real earnings from delivered orders and recorded tips."""
+        now = datetime.now(timezone.utc)
+        if period == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == "month":
+            start = now - timedelta(days=30)
+        else:
+            period = "week"
+            start = now - timedelta(days=7)
+
+        delivered_orders = (
+            (
+                await self.db.execute(
+                    select(Order, Merchant.name)
+                    .join(Merchant, Merchant.id == Order.merchant_id)
+                    .where(
+                        Order.driver_id == driver_id,
+                        Order.status == OrderStatus.DELIVERED.value,
+                        Order.updated_at >= start,
+                        Order.is_deleted.is_(False),
+                    )
+                    .order_by(Order.updated_at.desc())
+                )
+            )
+            .all()
+        )
+
+        order_ids = [order.id for order, _ in delivered_orders]
+        tips_by_order: dict[str, float] = {}
+        if order_ids:
+            tip_rows = (
+                await self.db.execute(
+                    select(DriverReview.order_id, func.coalesce(func.sum(DriverReview.tip_amount), 0.0))
+                    .where(
+                        DriverReview.order_id.in_(order_ids),
+                        DriverReview.driver_id == driver_id,
+                        DriverReview.is_deleted.is_(False),
+                    )
+                    .group_by(DriverReview.order_id)
+                )
+            ).all()
+            tips_by_order = {order_id: float(tip or 0.0) for order_id, tip in tip_rows}
+
+        activities: list[DriverEarningActivityResponse] = []
+        delivery_total = 0.0
+        tip_total = 0.0
+        daily: dict[str, float] = {}
+
+        for order, merchant_name in delivered_orders:
+            delivery_fee = float(order.delivery_fee or 0.0)
+            tip_amount = tips_by_order.get(order.id, 0.0)
+            amount = delivery_fee + tip_amount
+            delivery_total += delivery_fee
+            tip_total += tip_amount
+            day_key = order.updated_at.date().isoformat()
+            daily[day_key] = daily.get(day_key, 0.0) + amount
+            activities.append(
+                DriverEarningActivityResponse(
+                    id=order.id,
+                    order_id=order.id,
+                    order_number=order.order_number,
+                    merchant_name=merchant_name,
+                    amount=amount,
+                    delivery_fee=delivery_fee,
+                    tip_amount=tip_amount,
+                    delivered_at=order.updated_at.isoformat(),
+                )
+            )
+
+        chart = []
+        for index in range(6, -1, -1):
+            day = (now - timedelta(days=index)).date()
+            chart.append(
+                {
+                    "day": day.strftime("%a"),
+                    "date": day.isoformat(),
+                    "value": round(daily.get(day.isoformat(), 0.0), 2),
+                }
+            )
+
+        return DriverEarningsResponse(
+            period=period,
+            total=round(delivery_total + tip_total, 2),
+            delivery_total=round(delivery_total, 2),
+            tip_total=round(tip_total, 2),
+            trips=len(delivered_orders),
+            chart=chart,
+            recent_activity=activities[:20],
+        )
 
     async def get_driver_model_by_id(self, driver_id: str) -> Driver | None:
         """Get raw Driver ORM model by ID (for internal mutations)."""

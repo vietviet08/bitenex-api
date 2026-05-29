@@ -68,3 +68,52 @@ class NearbyDriverResponse(BaseDTO):
     latitude: float
     longitude: float
     status: DriverStatus
+
+
+class DriverReviewResponse(BaseDTO, TimestampMixin):
+    """Driver review response."""
+
+    id: str
+    driver_id: str
+    user_id: str
+    order_id: str
+    order_number: str | None = None
+    rating: int
+    comment: str | None = None
+    tip_amount: float
+    reviewer_name: str | None = None
+    reviewer_avatar: str | None = None
+
+
+class DriverRatingSummaryResponse(BaseDTO):
+    """Driver rating summary with recent feedback."""
+
+    average_rating: float
+    total_ratings: int
+    rating_distribution: dict[str, int]
+    recent_feedback: list[DriverReviewResponse]
+
+
+class DriverEarningActivityResponse(BaseDTO):
+    """Single earning activity."""
+
+    id: str
+    order_id: str
+    order_number: str
+    merchant_name: str
+    amount: float
+    delivery_fee: float
+    tip_amount: float
+    delivered_at: str
+
+
+class DriverEarningsResponse(BaseDTO):
+    """Driver earnings summary."""
+
+    period: str
+    total: float
+    delivery_total: float
+    tip_total: float
+    trips: int
+    chart: list[dict[str, object]]
+    recent_activity: list[DriverEarningActivityResponse]

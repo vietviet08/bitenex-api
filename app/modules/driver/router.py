@@ -10,7 +10,9 @@ from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
 from app.core.exceptions import NotFoundError
 from app.modules.driver.schemas import (
     DriverCreate,
+    DriverEarningsResponse,
     DriverLocationUpdate,
+    DriverRatingSummaryResponse,
     DriverResponse,
     DriverStatusUpdate,
     DriverUpdate,
@@ -103,6 +105,37 @@ async def update_status(
     """Update driver's availability status (online/offline)."""
     driver = await get_or_create_driver_profile(user, service)
     return await service.update_status(driver.id, data)
+
+
+@router.get(
+    "/profile/ratings",
+    response_model=DriverRatingSummaryResponse,
+    summary="Get my driver ratings",
+)
+async def get_my_ratings(
+    user: CurrentUser,
+    page: int = 1,
+    per_page: int = 20,
+    service: DriverService = Depends(get_driver_service),
+) -> DriverRatingSummaryResponse:
+    """Get current driver's real customer ratings."""
+    driver = await get_or_create_driver_profile(user, service)
+    return await service.get_rating_summary(driver.id, page=page, per_page=per_page)
+
+
+@router.get(
+    "/profile/earnings",
+    response_model=DriverEarningsResponse,
+    summary="Get my driver earnings",
+)
+async def get_my_earnings(
+    user: CurrentUser,
+    period: str = "week",
+    service: DriverService = Depends(get_driver_service),
+) -> DriverEarningsResponse:
+    """Get current driver's real earnings from delivered orders."""
+    driver = await get_or_create_driver_profile(user, service)
+    return await service.get_earnings(driver.id, period=period)
 
 
 @router.get(

@@ -18,15 +18,19 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.modules.driver.models import Driver
+from app.modules.driver.models import DriverReview
 from app.modules.merchant.models import (
     MenuItem,
     MenuItemOption,
     MenuItemOptionGroup,
     Merchant,
+    MerchantReview,
 )
 from app.modules.order.models import Order, OrderItem, OrderStatusHistory
 from app.modules.order.schemas import (
     AdminOrderListItem,
+    DriverRatingCreate,
+    MerchantRatingCreate,
     OrderCreate,
     OrderItemCreate,
     OrderItemResponse,
@@ -36,6 +40,7 @@ from app.modules.order.schemas import (
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
+from app.modules.user.models import User
 from app.shared.enums import DriverStatus, MerchantStatus, OrderStatus, PaymentStatus, Role, WebhookEvent
 from app.shared.n8n_client import N8nClient
 
@@ -451,6 +456,7 @@ class OrderService:
             raise NotFoundError(message="Merchant not found")
 
         driver: Driver | None = None
+        driver_user: User | None = None
         if order.driver_id:
             driver_result = await self.db.execute(
                 select(Driver).where(
@@ -459,6 +465,14 @@ class OrderService:
                 )
             )
             driver = driver_result.scalar_one_or_none()
+            if driver:
+                user_result = await self.db.execute(
+                    select(User).where(
+                        User.id == driver.user_id,
+                        User.is_deleted.is_(False),
+                    )
+                )
+                driver_user = user_result.scalar_one_or_none()
 
         return OrderTrackingResponse(
             order_id=order.id,
@@ -473,6 +487,10 @@ class OrderService:
             delivery_latitude=order.delivery_latitude,
             delivery_longitude=order.delivery_longitude,
             driver_id=order.driver_id,
+            driver_name=driver_user.full_name if driver_user else None,
+            driver_avatar_url=driver_user.avatar_url if driver_user else None,
+            driver_average_rating=driver.average_rating if driver else None,
+            driver_total_deliveries=driver.total_deliveries if driver else None,
             driver_latitude=driver.current_latitude if driver else None,
             driver_longitude=driver.current_longitude if driver else None,
             updated_at=order.updated_at,
@@ -832,6 +850,156 @@ class OrderService:
             self._to_admin_order_item(order, latest_payment_map.get(order.id)) for order in orders
         ]
         return items, total
+
+    async def rate_driver(
+        self,
+        order_id: str,
+        user_id: str,
+        data: DriverRatingCreate,
+    ) -> OrderResponse:
+        """Submit or update a driver rating for a delivered order."""
+        order = await self._get_order_model_by_id(order_id)
+        if order.user_id != user_id:
+            raise AuthorizationError(message="You can only rate your own orders")
+        if OrderStatus(order.status) != OrderStatus.DELIVERED:
+            raise ValidationError(message="Only delivered orders can be rated")
+        if not order.driver_id:
+            raise ValidationError(message="Order has no assigned driver")
+
+        user = await self._get_user_model(user_id)
+        existing = (
+            await self.db.execute(
+                select(DriverReview).where(
+                    DriverReview.order_id == order.id,
+                    DriverReview.user_id == user_id,
+                    DriverReview.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            existing.rating = data.rating
+            existing.comment = data.comment
+            existing.tip_amount = data.tip_amount
+        else:
+            self.db.add(
+                DriverReview(
+                    driver_id=order.driver_id,
+                    user_id=user_id,
+                    order_id=order.id,
+                    rating=data.rating,
+                    comment=data.comment,
+                    tip_amount=data.tip_amount,
+                    reviewer_name=user.full_name if user else None,
+                    reviewer_avatar=user.avatar_url if user else None,
+                )
+            )
+
+        await self.db.flush()
+        await self._refresh_driver_average_rating(order.driver_id)
+        await self.db.flush()
+        await self.db.refresh(order)
+        order_items = await self._get_order_items(order.id)
+        return self._to_order_response(order, order_items)
+
+    async def rate_merchant(
+        self,
+        order_id: str,
+        user_id: str,
+        data: MerchantRatingCreate,
+    ) -> OrderResponse:
+        """Submit or update a merchant rating for a delivered order."""
+        order = await self._get_order_model_by_id(order_id)
+        if order.user_id != user_id:
+            raise AuthorizationError(message="You can only rate your own orders")
+        if OrderStatus(order.status) != OrderStatus.DELIVERED:
+            raise ValidationError(message="Only delivered orders can be rated")
+
+        from app.modules.merchant.review_service import invalidate_summary_cache
+
+        user = await self._get_user_model(user_id)
+        existing = (
+            await self.db.execute(
+                select(MerchantReview).where(
+                    MerchantReview.order_id == order.id,
+                    MerchantReview.user_id == user_id,
+                    MerchantReview.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            existing.rating = data.rating
+            existing.comment = data.comment
+        else:
+            self.db.add(
+                MerchantReview(
+                    merchant_id=order.merchant_id,
+                    user_id=user_id,
+                    order_id=order.id,
+                    rating=data.rating,
+                    comment=data.comment,
+                    reviewer_name=user.full_name if user else None,
+                    reviewer_avatar=user.avatar_url if user else None,
+                )
+            )
+
+        await self.db.flush()
+        await self._refresh_merchant_average_rating(order.merchant_id)
+        await self.db.flush()
+        await invalidate_summary_cache(self.db, order.merchant_id)
+        await self.db.refresh(order)
+        order_items = await self._get_order_items(order.id)
+        return self._to_order_response(order, order_items)
+
+    async def _get_user_model(self, user_id: str) -> User | None:
+        result = await self.db.execute(
+            select(User).where(
+                User.id == user_id,
+                User.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _refresh_driver_average_rating(self, driver_id: str) -> None:
+        avg_rating = (
+            await self.db.execute(
+                select(func.avg(DriverReview.rating)).where(
+                    DriverReview.driver_id == driver_id,
+                    DriverReview.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none() or 0.0
+        driver = (
+            await self.db.execute(
+                select(Driver).where(
+                    Driver.id == driver_id,
+                    Driver.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
+        if driver:
+            driver.average_rating = round(float(avg_rating), 2)
+
+    async def _refresh_merchant_average_rating(self, merchant_id: str) -> None:
+        avg_rating = (
+            await self.db.execute(
+                select(func.avg(MerchantReview.rating)).where(
+                    MerchantReview.merchant_id == merchant_id,
+                    MerchantReview.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none() or 0.0
+        merchant = (
+            await self.db.execute(
+                select(Merchant).where(
+                    Merchant.id == merchant_id,
+                    Merchant.is_deleted.is_(False),
+                )
+            )
+        ).scalar_one_or_none()
+        if merchant:
+            merchant.average_rating = round(float(avg_rating), 2)
 
     async def cancel_order(
         self,
