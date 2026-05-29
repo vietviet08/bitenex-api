@@ -110,7 +110,11 @@ class DriverService:
             from app.core.exceptions import NotFoundError
             raise NotFoundError("Driver", driver_id)
 
-        driver.status = data.status.value
+        driver.status = (
+            data.status.value
+            if isinstance(data.status, DriverStatus)
+            else DriverStatus(data.status).value
+        )
         await self.db.flush()
         await self.db.refresh(driver)
         return DriverResponse.model_validate(driver)

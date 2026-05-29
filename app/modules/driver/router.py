@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
 from app.core.exceptions import NotFoundError
 from app.modules.driver.schemas import (
+    DriverCreate,
     DriverLocationUpdate,
     DriverResponse,
     DriverStatusUpdate,
@@ -17,6 +18,7 @@ from app.modules.driver.schemas import (
 )
 from app.modules.driver.service import DriverService
 from app.shared.dto import MessageResponse
+from app.shared.enums import Role
 
 router = APIRouter(
     prefix="/drivers",
@@ -29,6 +31,21 @@ def get_driver_service(db: AsyncSession = Depends(get_db)) -> DriverService:
     return DriverService(db)
 
 
+async def get_or_create_driver_profile(
+    user: CurrentUser,
+    service: DriverService,
+) -> DriverResponse:
+    driver = await service.get_driver_by_user_id(user.user_id)
+    if driver is not None:
+        return driver
+
+    if user.role != Role.DRIVER:
+        raise NotFoundError(message=f"Driver '{user.user_id}' not found")
+
+    created = await service.create_driver(DriverCreate(user_id=user.user_id))
+    return await service.approve_driver(created.id)
+
+
 @router.get(
     "/profile",
     response_model=DriverResponse,
@@ -39,10 +56,7 @@ async def get_my_driver_profile(
     service: DriverService = Depends(get_driver_service),
 ) -> DriverResponse:
     """Get current driver's profile."""
-    driver = await service.get_driver_by_user_id(user.user_id)
-    if driver is None:
-        raise NotFoundError("Driver", user.user_id)
-    return driver
+    return await get_or_create_driver_profile(user, service)
 
 
 @router.patch(
@@ -56,9 +70,7 @@ async def update_my_driver_profile(
     service: DriverService = Depends(get_driver_service),
 ) -> DriverResponse:
     """Update current driver's profile."""
-    driver = await service.get_driver_by_user_id(user.user_id)
-    if driver is None:
-        raise NotFoundError("Driver", user.user_id)
+    driver = await get_or_create_driver_profile(user, service)
     return await service.update_driver(driver.id, data)
 
 
@@ -73,9 +85,7 @@ async def update_location(
     service: DriverService = Depends(get_driver_service),
 ) -> MessageResponse:
     """Update driver's current location."""
-    driver = await service.get_driver_by_user_id(user.user_id)
-    if driver is None:
-        raise NotFoundError("Driver", user.user_id)
+    driver = await get_or_create_driver_profile(user, service)
     await service.update_location(driver.id, data)
     return MessageResponse(message="Location updated")
 
@@ -91,9 +101,7 @@ async def update_status(
     service: DriverService = Depends(get_driver_service),
 ) -> DriverResponse:
     """Update driver's availability status (online/offline)."""
-    driver = await service.get_driver_by_user_id(user.user_id)
-    if driver is None:
-        raise NotFoundError("Driver", user.user_id)
+    driver = await get_or_create_driver_profile(user, service)
     return await service.update_status(driver.id, data)
 
 
@@ -126,7 +134,7 @@ async def get_driver(
     """Get driver by ID. Admin only."""
     driver = await service.get_driver_by_id(driver_id)
     if driver is None:
-        raise NotFoundError("Driver", driver_id)
+        raise NotFoundError(message=f"Driver '{driver_id}' not found")
     return driver
 
 
