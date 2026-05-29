@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -527,6 +527,9 @@ class OrderService:
                 message=f"Invalid transition from {current_status.value} to {new_status.value}"
             )
 
+        if new_status == OrderStatus.CANCELLED:
+            self._ensure_order_can_be_cancelled(order, current_status, actor_role)
+
         order.status = new_status.value
         self.db.add(
             OrderStatusHistory(
@@ -581,6 +584,8 @@ class OrderService:
         }:
             if new_status == OrderStatus.DELIVERED and order.driver_id:
                 await self._mark_driver_available_after_delivery(order.driver_id)
+            if new_status == OrderStatus.CANCELLED:
+                await self._cancel_pending_dispatch_assignments(order.id)
             await self._emit_order_status(order)
 
         order_items = await self._get_order_items(order.id)
@@ -657,6 +662,20 @@ class OrderService:
             order.user_id,
             {"event": RealtimeEventType.ORDER_STATUS_CHANGED.value, "data": payload},
         )
+
+        merchant_result = await self.db.execute(
+            select(Merchant).where(
+                Merchant.id == order.merchant_id,
+                Merchant.is_deleted.is_(False),
+            )
+        )
+        merchant = merchant_result.scalar_one_or_none()
+        if merchant:
+            await connection_manager.send_personal(
+                merchant.user_id,
+                {"event": RealtimeEventType.ORDER_STATUS_CHANGED.value, "data": payload},
+            )
+
         if not order.driver_id:
             return
 
@@ -828,20 +847,13 @@ class OrderService:
             actor_user_id=cancelled_by,
             actor_role=actor_role,
         )
-        cancellable_statuses = {
-            OrderStatus.PENDING,
-            OrderStatus.CONFIRMED,
-            OrderStatus.PREPARING,
-            OrderStatus.READY,
-        }
 
         current_status = OrderStatus(order.status)
         if current_status == OrderStatus.CANCELLED:
             order_items = await self._get_order_items(order.id)
             return self._to_order_response(order, order_items)
 
-        if current_status not in cancellable_statuses:
-            raise ValidationError(message=f"Order cannot be cancelled from {current_status.value}")
+        self._ensure_order_can_be_cancelled(order, current_status, actor_role)
 
         order.status = OrderStatus.CANCELLED.value
         self.db.add(
@@ -889,9 +901,145 @@ class OrderService:
 
         await self.db.flush()
         await self.db.refresh(order)
+        await self._cancel_pending_dispatch_assignments(order.id)
+        if order.driver_id:
+            await self._mark_driver_available_after_delivery(order.driver_id)
+        await self._emit_order_status(order)
 
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
+
+    def _ensure_order_can_be_cancelled(
+        self,
+        order: Order,
+        current_status: OrderStatus,
+        actor_role: Role | str | None,
+    ) -> None:
+        normalized_role = actor_role if isinstance(actor_role, Role) else (
+            Role(actor_role) if actor_role is not None else None
+        )
+
+        if current_status in {OrderStatus.DELIVERED, OrderStatus.CANCELLED, OrderStatus.REFUNDED}:
+            raise ValidationError(message=f"Order cannot be cancelled from {current_status.value}")
+
+        if normalized_role == Role.USER:
+            if current_status not in {OrderStatus.PENDING, OrderStatus.CONFIRMED}:
+                raise ValidationError(
+                    message="User can only cancel before the merchant starts preparing"
+                )
+            if order.driver_id:
+                raise ValidationError(message="Order already has a driver assigned")
+            return
+
+        if normalized_role == Role.MERCHANT:
+            if current_status in {OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING}:
+                return
+            if current_status == OrderStatus.READY and not order.driver_id:
+                return
+            raise ValidationError(
+                message="Merchant can only cancel before driver pickup or when ready with no driver assigned"
+            )
+
+        if normalized_role == Role.ADMIN:
+            return
+
+        cancellable_statuses = {
+            OrderStatus.PENDING,
+            OrderStatus.CONFIRMED,
+            OrderStatus.PREPARING,
+            OrderStatus.READY,
+        }
+        if current_status not in cancellable_statuses:
+            raise ValidationError(message=f"Order cannot be cancelled from {current_status.value}")
+
+    async def _cancel_pending_dispatch_assignments(self, order_id: str) -> None:
+        from app.modules.dispatch.models import DispatchAssignment
+
+        await self.db.execute(
+            update(DispatchAssignment)
+            .where(
+                DispatchAssignment.order_id == order_id,
+                DispatchAssignment.status == "PENDING",
+                DispatchAssignment.is_deleted.is_(False),
+            )
+            .values(status="CANCELLED")
+        )
+
+    async def driver_cancel_pickup(
+        self,
+        order_id: str,
+        *,
+        driver_user_id: str,
+        reason: str = "",
+    ) -> OrderResponse:
+        """Release an accepted order before the driver has picked it up."""
+        driver_id = await self._get_driver_id_by_user_id(driver_user_id)
+        order = await self._get_order_model_by_id(order_id)
+
+        if order.driver_id != driver_id:
+            raise AuthorizationError(message="You can only release your assigned orders")
+
+        current_status = OrderStatus(order.status)
+        if current_status != OrderStatus.PICKING_UP:
+            raise ValidationError(message="Driver can only release an order before pickup")
+
+        order.driver_id = None
+        order.status = OrderStatus.READY.value
+        self.db.add(
+            OrderStatusHistory(
+                order_id=order.id,
+                from_status=current_status.value,
+                to_status=OrderStatus.READY.value,
+                changed_by=driver_user_id,
+                reason=reason or "Driver released order before pickup",
+            )
+        )
+
+        await self._cancel_driver_dispatch_assignments(
+            order.id,
+            driver_id,
+            reason or "Driver released order before pickup",
+        )
+        await self._mark_driver_online(driver_id)
+        await self.db.flush()
+        await self.db.refresh(order)
+        await self._emit_order_status(order)
+
+        import asyncio as _asyncio
+        _asyncio.create_task(self._auto_dispatch(order.id))
+
+        order_items = await self._get_order_items(order.id)
+        return self._to_order_response(order, order_items)
+
+    async def _cancel_driver_dispatch_assignments(
+        self,
+        order_id: str,
+        driver_id: str,
+        reason: str,
+    ) -> None:
+        from app.modules.dispatch.models import DispatchAssignment
+
+        await self.db.execute(
+            update(DispatchAssignment)
+            .where(
+                DispatchAssignment.order_id == order_id,
+                DispatchAssignment.driver_id == driver_id,
+                DispatchAssignment.status.in_(["PENDING", "ACCEPTED"]),
+                DispatchAssignment.is_deleted.is_(False),
+            )
+            .values(status="CANCELLED", rejection_reason=reason)
+        )
+
+    async def _mark_driver_online(self, driver_id: str) -> None:
+        result = await self.db.execute(
+            select(Driver).where(
+                Driver.id == driver_id,
+                Driver.is_deleted.is_(False),
+            )
+        )
+        driver = result.scalar_one_or_none()
+        if driver:
+            driver.status = DriverStatus.ONLINE.value
 
     async def assign_driver(
         self,

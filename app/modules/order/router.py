@@ -146,6 +146,26 @@ async def cancel_order(
     )
 
 
+@router.post(
+    "/{order_id}/driver/cancel-pickup",
+    response_model=OrderResponse,
+    summary="Driver cancels accepted pickup",
+    dependencies=[Depends(require_role(Role.DRIVER))],
+)
+async def driver_cancel_pickup(
+    order_id: str,
+    user: CurrentUser,
+    reason: str = "",
+    service: OrderService = Depends(get_order_service),
+) -> OrderResponse:
+    """Let an assigned driver release an order before pickup."""
+    return await service.driver_cancel_pickup(
+        order_id,
+        driver_user_id=user.user_id,
+        reason=reason,
+    )
+
+
 # =============================================================================
 # Merchant Endpoints
 # =============================================================================
