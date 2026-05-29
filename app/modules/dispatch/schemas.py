@@ -33,11 +33,16 @@ class DriverAssignmentResponse(BaseDTO):
     assignment_id: str
     order_id: str
     status: str
+    order_number: str
+    merchant_name: str
     pickup_address: str
     pickup_latitude: float
     pickup_longitude: float
     delivery_address: str
+    item_count: int = 0
+    distance_km: float | None = None
     estimated_earnings: float | None = None
+    expires_in_seconds: int | None = None
 
 
 class AssignmentAction(BaseDTO):

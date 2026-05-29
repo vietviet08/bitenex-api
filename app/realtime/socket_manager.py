@@ -24,8 +24,6 @@ class ConnectionManager:
         user_id: str,
     ) -> None:
         """Accept and register a WebSocket connection."""
-        await websocket.accept()
-
         if user_id not in self._connections:
             self._connections[user_id] = []
 

@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.dispatch.models import DispatchAssignment
@@ -17,7 +17,8 @@ from app.modules.dispatch.schemas import (
     DriverAssignmentResponse,
 )
 from app.modules.driver.service import DriverService
-from app.modules.order.models import Order
+from app.modules.merchant.models import Merchant
+from app.modules.order.models import Order, OrderItem
 from app.shared.enums import DispatchStrategy, DriverStatus, OrderStatus
 
 logger = logging.getLogger(__name__)
@@ -124,19 +125,25 @@ class DispatchService:
 
         responses: list[DriverAssignmentResponse] = []
         for a in assignments:
-            order = await self._get_order(a.order_id)
-            if order is None:
+            details = await self._get_assignment_details(a.order_id)
+            if details is None:
                 continue
+            order, merchant, item_count = details
             responses.append(
                 DriverAssignmentResponse(
                     assignment_id=a.id,
                     order_id=a.order_id,
                     status=a.status,
-                    pickup_address=order.delivery_address or "",
-                    pickup_latitude=order.delivery_latitude or 0.0,
-                    pickup_longitude=order.delivery_longitude or 0.0,
+                    order_number=order.order_number,
+                    merchant_name=merchant.name,
+                    pickup_address=merchant.address,
+                    pickup_latitude=merchant.latitude or 0.0,
+                    pickup_longitude=merchant.longitude or 0.0,
                     delivery_address=order.delivery_address or "",
+                    item_count=item_count,
+                    distance_km=a.distance_km,
                     estimated_earnings=float(order.delivery_fee or 0),
+                    expires_in_seconds=_DEFAULT_TIMEOUT_SECONDS,
                 )
             )
         return responses
@@ -191,6 +198,7 @@ class DispatchService:
                 if order.status == OrderStatus.READY.value:
                     order.status = OrderStatus.PICKING_UP.value
             await self.db.flush()
+            await self._emit_order_status(order) if order else None
 
             return DispatchResponse(
                 assignment_id=assignment.id,
@@ -326,6 +334,32 @@ class DispatchService:
             raise ValueError(f"Assignment {assignment_id} not found")
         return assignment
 
+    async def _get_assignment_details(
+        self,
+        order_id: str,
+    ) -> tuple[Order, Merchant, int] | None:
+        result = await self.db.execute(
+            select(Order, Merchant, func.coalesce(func.sum(OrderItem.quantity), 0))
+            .join(Merchant, Merchant.id == Order.merchant_id)
+            .outerjoin(
+                OrderItem,
+                (OrderItem.order_id == Order.id)
+                & (OrderItem.is_deleted.is_(False)),
+            )
+            .where(
+                Order.id == order_id,
+                Order.is_deleted.is_(False),
+                Merchant.is_deleted.is_(False),
+            )
+            .group_by(Order.id, Merchant.id)
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+
+        order, merchant, item_count = row
+        return order, merchant, int(item_count or 0)
+
     async def _emit_assignment(
         self,
         assignment: DispatchAssignment,
@@ -336,7 +370,10 @@ class DispatchService:
         from app.realtime import connection_manager
         from app.realtime.events import RealtimeEventType
 
-        order = await self._get_order(request.order_id)
+        details = await self._get_assignment_details(request.order_id)
+        if details is None:
+            return
+        order, merchant, item_count = details
         estimated_earnings = float(order.delivery_fee) if order else 0.0
 
         payload = {
@@ -344,17 +381,38 @@ class DispatchService:
             "data": {
                 "assignment_id": assignment.id,
                 "order_id": assignment.order_id,
+                "order_number": order.order_number,
+                "merchant_name": merchant.name,
                 "distance_km": assignment.distance_km,
                 "estimated_earnings": estimated_earnings,
                 "pickup_latitude": request.pickup_latitude,
                 "pickup_longitude": request.pickup_longitude,
+                "pickup_address": merchant.address,
                 "delivery_address": order.delivery_address if order else "",
+                "item_count": item_count,
                 "expires_in_seconds": _DEFAULT_TIMEOUT_SECONDS,
             },
         }
         await connection_manager.send_personal(driver_user_id, payload)
         logger.info(
             f"Dispatched assignment {assignment.id} to driver user {driver_user_id}"
+        )
+
+    async def _emit_order_status(self, order: Order) -> None:
+        from app.realtime import connection_manager
+        from app.realtime.events import RealtimeEventType
+
+        await connection_manager.send_personal(
+            order.user_id,
+            {
+                "event": RealtimeEventType.ORDER_STATUS_CHANGED.value,
+                "data": {
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                    "status": order.status,
+                    "driver_id": order.driver_id,
+                },
+            },
         )
 
     async def _handle_timeout(self, assignment_id: str, driver_id: str) -> None:

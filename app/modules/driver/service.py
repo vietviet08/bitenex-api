@@ -163,6 +163,7 @@ class DriverService:
         drivers = result.scalars().all()
 
         nearby: list[NearbyDriverResponse] = []
+        fallback: list[NearbyDriverResponse] = []
         for driver in drivers:
             dist = calculate_distance(
                 latitude,
@@ -170,17 +171,20 @@ class DriverService:
                 driver.current_latitude,  # type: ignore[arg-type]
                 driver.current_longitude,  # type: ignore[arg-type]
             )
+            response = NearbyDriverResponse(
+                driver_id=driver.id,
+                user_id=driver.user_id,
+                distance_km=round(dist, 3),
+                latitude=driver.current_latitude,  # type: ignore[arg-type]
+                longitude=driver.current_longitude,  # type: ignore[arg-type]
+                status=DriverStatus(driver.status),
+            )
+            fallback.append(response)
             if dist <= radius_km:
-                nearby.append(
-                    NearbyDriverResponse(
-                        driver_id=driver.id,
-                        user_id=driver.user_id,
-                        distance_km=round(dist, 3),
-                        latitude=driver.current_latitude,  # type: ignore[arg-type]
-                        longitude=driver.current_longitude,  # type: ignore[arg-type]
-                        status=DriverStatus(driver.status),
-                    )
-                )
+                nearby.append(response)
+
+        if not nearby:
+            nearby = fallback
 
         # Sort closest first
         nearby.sort(key=lambda d: d.distance_km)

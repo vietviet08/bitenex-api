@@ -35,7 +35,7 @@ from app.modules.order.schemas import (
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
-from app.shared.enums import MerchantStatus, OrderStatus, PaymentStatus, Role, WebhookEvent
+from app.shared.enums import DriverStatus, MerchantStatus, OrderStatus, PaymentStatus, Role, WebhookEvent
 from app.shared.n8n_client import N8nClient
 
 
@@ -517,47 +517,122 @@ class OrderService:
         # Auto-dispatch driver when merchant marks order READY
         if new_status == OrderStatus.READY:
             import asyncio as _asyncio
-            _asyncio.create_task(self._auto_dispatch(order))
+            _asyncio.create_task(self._auto_dispatch(order.id))
+
+        if new_status in {
+            OrderStatus.PICKING_UP,
+            OrderStatus.DELIVERING,
+            OrderStatus.DELIVERED,
+            OrderStatus.CANCELLED,
+        }:
+            if new_status == OrderStatus.DELIVERED and order.driver_id:
+                await self._mark_driver_available_after_delivery(order.driver_id)
+            await self._emit_order_status(order)
 
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
 
-    async def _auto_dispatch(self, order: "Order") -> None:
+    async def _auto_dispatch(self, order_id: str) -> None:
         """Background task: dispatch the nearest driver when order is READY."""
         import logging as _logging
 
         _logger = _logging.getLogger(__name__)
 
-        if order.delivery_latitude is None or order.delivery_longitude is None:
-            _logger.warning(
-                f"Order {order.id} has no delivery coordinates – skipping dispatch"
-            )
-            return
-
         from app.core.database import AsyncSessionLocal
         from app.modules.dispatch.schemas import DispatchRequest
         from app.modules.dispatch.service import DispatchService
+        from app.modules.merchant.models import Merchant
 
         async with AsyncSessionLocal() as session:
             try:
+                order_result = await session.execute(
+                    select(Order).where(
+                        Order.id == order_id,
+                        Order.is_deleted.is_(False),
+                    )
+                )
+                order = order_result.scalar_one_or_none()
+                if order is None:
+                    return
+
+                merchant_result = await session.execute(
+                    select(Merchant).where(
+                        Merchant.id == order.merchant_id,
+                        Merchant.is_deleted.is_(False),
+                    )
+                )
+                merchant = merchant_result.scalar_one_or_none()
+                if (
+                    merchant is None
+                    or merchant.latitude is None
+                    or merchant.longitude is None
+                ):
+                    _logger.warning(
+                        f"Order {order.id} merchant has no pickup coordinates - skipping dispatch"
+                    )
+                    return
+
                 svc = DispatchService(session)
                 await svc.dispatch_order(
                     DispatchRequest(
                         order_id=order.id,
-                        pickup_latitude=order.delivery_latitude,
-                        pickup_longitude=order.delivery_longitude,
+                        pickup_latitude=merchant.latitude,
+                        pickup_longitude=merchant.longitude,
                     )
                 )
                 await session.commit()
                 _logger.info(f"Auto-dispatch started for order {order.id}")
             except ValueError as exc:
-                _logger.warning(f"Auto-dispatch found no drivers for order {order.id}: {exc}")
+                _logger.warning(f"Auto-dispatch found no drivers for order {order_id}: {exc}")
                 await session.rollback()
             except Exception as exc:
-                _logger.exception(f"Auto-dispatch error for order {order.id}: {exc}")
+                _logger.exception(f"Auto-dispatch error for order {order_id}: {exc}")
                 await session.rollback()
 
+    async def _emit_order_status(self, order: "Order") -> None:
+        from app.realtime import connection_manager
+        from app.realtime.events import RealtimeEventType
 
+        payload = {
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "status": order.status,
+            "driver_id": order.driver_id,
+        }
+        await connection_manager.send_personal(
+            order.user_id,
+            {"event": RealtimeEventType.ORDER_STATUS_CHANGED.value, "data": payload},
+        )
+        if not order.driver_id:
+            return
+
+        result = await self.db.execute(
+            select(Driver).where(
+                Driver.id == order.driver_id,
+                Driver.is_deleted.is_(False),
+            )
+        )
+        driver = result.scalar_one_or_none()
+        if driver:
+            await connection_manager.send_personal(
+                driver.user_id,
+                {"event": RealtimeEventType.ORDER_STATUS_CHANGED.value, "data": payload},
+            )
+
+    async def _mark_driver_available_after_delivery(self, driver_id: str) -> None:
+        result = await self.db.execute(
+            select(Driver).where(
+                Driver.id == driver_id,
+                Driver.is_deleted.is_(False),
+            )
+        )
+        driver = result.scalar_one_or_none()
+        if not driver:
+            return
+
+        driver.status = DriverStatus.ONLINE.value
+        driver.total_deliveries = (driver.total_deliveries or 0) + 1
+        await self.db.flush()
 
     async def get_user_orders(
         self,
