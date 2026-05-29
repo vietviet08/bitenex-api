@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
+from app.core.exceptions import NotFoundError
 from app.modules.dispatch.schemas import (
     AssignmentAction,
     DispatchRequest,
@@ -14,6 +15,7 @@ from app.modules.dispatch.schemas import (
     DriverAssignmentResponse,
 )
 from app.modules.dispatch.service import DispatchService
+from app.modules.driver.service import DriverService
 
 router = APIRouter(
     prefix="/dispatch",
@@ -87,11 +89,14 @@ async def reassign_order(
 )
 async def get_pending_assignments(
     user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
     service: DispatchService = Depends(get_dispatch_service),
 ) -> list[DriverAssignmentResponse]:
     """Get pending assignments for current driver."""
-    # TODO: Get driver_id from user
-    return await service.get_pending_assignments("")
+    driver = await DriverService(db).get_driver_by_user_id(user.user_id)
+    if driver is None:
+        raise NotFoundError("Driver", user.user_id)
+    return await service.get_pending_assignments(driver.id)
 
 
 @router.post(
@@ -103,8 +108,11 @@ async def respond_to_assignment(
     assignment_id: str,
     action: AssignmentAction,
     user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
     service: DispatchService = Depends(get_dispatch_service),
 ) -> DispatchResponse:
     """Accept or reject an assignment."""
-    # TODO: Get driver_id from user
-    return await service.respond_to_assignment(assignment_id, "", action)
+    driver = await DriverService(db).get_driver_by_user_id(user.user_id)
+    if driver is None:
+        raise NotFoundError("Driver", user.user_id)
+    return await service.respond_to_assignment(assignment_id, driver.id, action)

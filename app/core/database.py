@@ -40,6 +40,9 @@ async_session_maker = async_sessionmaker(
     autoflush=False,
 )
 
+# Conventional alias used by background tasks
+AsyncSessionLocal = async_session_maker
+
 
 class Base(DeclarativeBase):
     """

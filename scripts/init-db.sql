@@ -6,6 +6,7 @@
 -- Create extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- Grant privileges (if needed for specific users)
 -- GRANT ALL PRIVILEGES ON DATABASE bitenex TO bitenex_user;
