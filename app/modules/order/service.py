@@ -32,6 +32,7 @@ from app.modules.order.schemas import (
     OrderItemResponse,
     OrderResponse,
     OrderStatusUpdate,
+    OrderTrackingResponse,
     SelectedOptionInput,
 )
 from app.modules.payment.models import Payment, Refund
@@ -423,6 +424,59 @@ class OrderService:
         )
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
+
+    async def get_order_tracking(
+        self,
+        order_id: str,
+        *,
+        actor_user_id: str | None = None,
+        actor_role: Role | str | None = None,
+    ) -> OrderTrackingResponse:
+        """Get live tracking coordinates for an order."""
+        order = await self._get_order_model_by_id(order_id)
+        await self._enforce_order_access(
+            order,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+        )
+
+        merchant_result = await self.db.execute(
+            select(Merchant).where(
+                Merchant.id == order.merchant_id,
+                Merchant.is_deleted.is_(False),
+            )
+        )
+        merchant = merchant_result.scalar_one_or_none()
+        if merchant is None:
+            raise NotFoundError(message="Merchant not found")
+
+        driver: Driver | None = None
+        if order.driver_id:
+            driver_result = await self.db.execute(
+                select(Driver).where(
+                    Driver.id == order.driver_id,
+                    Driver.is_deleted.is_(False),
+                )
+            )
+            driver = driver_result.scalar_one_or_none()
+
+        return OrderTrackingResponse(
+            order_id=order.id,
+            order_number=order.order_number,
+            status=OrderStatus(order.status),
+            merchant_id=merchant.id,
+            merchant_name=merchant.name,
+            pickup_address=merchant.address,
+            pickup_latitude=merchant.latitude,
+            pickup_longitude=merchant.longitude,
+            delivery_address=order.delivery_address,
+            delivery_latitude=order.delivery_latitude,
+            delivery_longitude=order.delivery_longitude,
+            driver_id=order.driver_id,
+            driver_latitude=driver.current_latitude if driver else None,
+            driver_longitude=driver.current_longitude if driver else None,
+            updated_at=order.updated_at,
+        )
 
     async def get_order_by_number(
         self,

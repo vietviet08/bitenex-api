@@ -86,6 +86,26 @@ class OrderResponse(BaseDTO, TimestampMixin):
     items: list[OrderItemResponse] = []
 
 
+class OrderTrackingResponse(BaseDTO):
+    """Live tracking payload for an order."""
+
+    order_id: str
+    order_number: str
+    status: OrderStatus
+    merchant_id: str
+    merchant_name: str
+    pickup_address: str
+    pickup_latitude: float | None = None
+    pickup_longitude: float | None = None
+    delivery_address: str
+    delivery_latitude: float | None = None
+    delivery_longitude: float | None = None
+    driver_id: str | None = None
+    driver_latitude: float | None = None
+    driver_longitude: float | None = None
+    updated_at: datetime | None = None
+
+
 class AdminOrderListItem(BaseDTO, TimestampMixin):
     """Admin order list item."""
 

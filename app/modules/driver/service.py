@@ -2,6 +2,8 @@
 # Driver Module - Service Layer
 # =============================================================================
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +16,10 @@ from app.modules.driver.schemas import (
     DriverUpdate,
     NearbyDriverResponse,
 )
-from app.shared.enums import DriverStatus
+from app.modules.order.models import Order
+from app.realtime import connection_manager
+from app.realtime.events import RealtimeEventType
+from app.shared.enums import DriverStatus, OrderStatus
 from app.shared.utils import calculate_distance
 
 
@@ -143,6 +148,43 @@ class DriverService:
         )
         self.db.add(location_record)
         await self.db.flush()
+        await self._emit_active_order_location(driver, data)
+
+    async def _emit_active_order_location(
+        self,
+        driver: Driver,
+        data: DriverLocationUpdate,
+    ) -> None:
+        """Push the latest driver GPS point to users with active deliveries."""
+        result = await self.db.execute(
+            select(Order).where(
+                Order.driver_id == driver.id,
+                Order.status.in_(
+                    [
+                        OrderStatus.PICKING_UP.value,
+                        OrderStatus.DELIVERING.value,
+                    ]
+                ),
+                Order.is_deleted.is_(False),
+            )
+        )
+        active_orders = result.scalars().all()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        for order in active_orders:
+            await connection_manager.send_personal(
+                order.user_id,
+                {
+                    "event": RealtimeEventType.DRIVER_LOCATION_UPDATED.value,
+                    "data": {
+                        "order_id": order.id,
+                        "driver_id": driver.id,
+                        "latitude": data.latitude,
+                        "longitude": data.longitude,
+                        "speed": data.speed,
+                        "timestamp": timestamp,
+                    },
+                },
+            )
 
     async def get_nearby_drivers(
         self,

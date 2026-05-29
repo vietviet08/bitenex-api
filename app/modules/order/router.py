@@ -13,6 +13,7 @@ from app.modules.order.schemas import (
     OrderListResponse,
     OrderResponse,
     OrderStatusUpdate,
+    OrderTrackingResponse,
 )
 from app.modules.order.service import OrderService
 from app.shared.enums import OrderStatus, Role
@@ -87,6 +88,24 @@ async def admin_list_orders(
         per_page=per_page,
     )
     return AdminOrderListResponse(items=items, total=total)
+
+
+@router.get(
+    "/{order_id}/tracking",
+    response_model=OrderTrackingResponse,
+    summary="Get order live tracking data",
+)
+async def get_order_tracking(
+    order_id: str,
+    user: CurrentUser,
+    service: OrderService = Depends(get_order_service),
+) -> OrderTrackingResponse:
+    """Get pickup, delivery, and latest driver coordinates for an order."""
+    return await service.get_order_tracking(
+        order_id,
+        actor_user_id=user.user_id,
+        actor_role=user.role,
+    )
 
 
 @router.get(
