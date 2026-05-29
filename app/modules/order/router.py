@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_role
 from app.modules.order.schemas import (
     AdminOrderListResponse,
+    DriverRatingCreate,
+    MerchantRatingCreate,
     OrderCreate,
     OrderListResponse,
     OrderResponse,
@@ -143,6 +145,56 @@ async def cancel_order(
         reason,
         user.user_id,
         actor_role=user.role,
+    )
+
+
+@router.post(
+    "/{order_id}/rate-driver",
+    response_model=OrderResponse,
+    summary="Rate order driver",
+)
+async def rate_order_driver(
+    order_id: str,
+    data: DriverRatingCreate,
+    user: CurrentUser,
+    service: OrderService = Depends(get_order_service),
+) -> OrderResponse:
+    """Submit or update the current user's driver rating for a delivered order."""
+    return await service.rate_driver(order_id, user.user_id, data)
+
+
+@router.post(
+    "/{order_id}/rate-merchant",
+    response_model=OrderResponse,
+    summary="Rate order merchant",
+)
+async def rate_order_merchant(
+    order_id: str,
+    data: MerchantRatingCreate,
+    user: CurrentUser,
+    service: OrderService = Depends(get_order_service),
+) -> OrderResponse:
+    """Submit or update the current user's merchant rating for a delivered order."""
+    return await service.rate_merchant(order_id, user.user_id, data)
+
+
+@router.post(
+    "/{order_id}/driver/cancel-pickup",
+    response_model=OrderResponse,
+    summary="Driver cancels accepted pickup",
+    dependencies=[Depends(require_role(Role.DRIVER))],
+)
+async def driver_cancel_pickup(
+    order_id: str,
+    user: CurrentUser,
+    reason: str = "",
+    service: OrderService = Depends(get_order_service),
+) -> OrderResponse:
+    """Let an assigned driver release an order before pickup."""
+    return await service.driver_cancel_pickup(
+        order_id,
+        driver_user_id=user.user_id,
+        reason=reason,
     )
 
 

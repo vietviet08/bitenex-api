@@ -2,7 +2,7 @@
 # Driver Module - ORM Models
 # =============================================================================
 
-from sqlalchemy import Boolean, Float, String, Text
+from sqlalchemy import Boolean, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel
@@ -100,3 +100,18 @@ class DriverLocation(BaseModel):
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     speed: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class DriverReview(BaseModel):
+    """Customer review for a driver after a completed delivery."""
+
+    __tablename__ = "driver_reviews"
+
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    order_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tip_amount: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    reviewer_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reviewer_avatar: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -63,7 +63,26 @@ class DispatchService:
         if not nearby:
             raise ValueError("No available drivers nearby")
 
+        excluded_driver_ids = set(
+            (
+                await self.db.execute(
+                    select(DispatchAssignment.driver_id).where(
+                        DispatchAssignment.order_id == request.order_id,
+                        DispatchAssignment.status.in_(
+                            ["ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"]
+                        ),
+                        DispatchAssignment.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
         for candidate in nearby:
+            if candidate.driver_id in excluded_driver_ids:
+                continue
+
             assignment = DispatchAssignment(
                 order_id=request.order_id,
                 driver_id=candidate.driver_id,
