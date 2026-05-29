@@ -75,6 +75,18 @@ class Settings(BaseSettings):
     # Default: aws/claude-haiku-4-5 (fast, cheap, tested on vertex-key.com proxy)
     openai_chat_model: str = "aws/claude-haiku-4-5"
 
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, v: bool | str) -> bool:
+        """Support common build-mode values from parent shells."""
+        if isinstance(v, str):
+            value = v.strip().lower()
+            if value in {"debug", "dev", "development"}:
+                return True
+            if value in {"release", "prod", "production"}:
+                return False
+        return v
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | List[str]) -> List[str]:

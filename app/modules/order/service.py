@@ -514,8 +514,50 @@ class OrderService:
                 },
             )
 
+        # Auto-dispatch driver when merchant marks order READY
+        if new_status == OrderStatus.READY:
+            import asyncio as _asyncio
+            _asyncio.create_task(self._auto_dispatch(order))
+
         order_items = await self._get_order_items(order.id)
         return self._to_order_response(order, order_items)
+
+    async def _auto_dispatch(self, order: "Order") -> None:
+        """Background task: dispatch the nearest driver when order is READY."""
+        import logging as _logging
+
+        _logger = _logging.getLogger(__name__)
+
+        if order.delivery_latitude is None or order.delivery_longitude is None:
+            _logger.warning(
+                f"Order {order.id} has no delivery coordinates – skipping dispatch"
+            )
+            return
+
+        from app.core.database import AsyncSessionLocal
+        from app.modules.dispatch.schemas import DispatchRequest
+        from app.modules.dispatch.service import DispatchService
+
+        async with AsyncSessionLocal() as session:
+            try:
+                svc = DispatchService(session)
+                await svc.dispatch_order(
+                    DispatchRequest(
+                        order_id=order.id,
+                        pickup_latitude=order.delivery_latitude,
+                        pickup_longitude=order.delivery_longitude,
+                    )
+                )
+                await session.commit()
+                _logger.info(f"Auto-dispatch started for order {order.id}")
+            except ValueError as exc:
+                _logger.warning(f"Auto-dispatch found no drivers for order {order.id}: {exc}")
+                await session.rollback()
+            except Exception as exc:
+                _logger.exception(f"Auto-dispatch error for order {order.id}: {exc}")
+                await session.rollback()
+
+
 
     async def get_user_orders(
         self,

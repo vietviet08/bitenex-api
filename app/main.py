@@ -32,6 +32,7 @@ from app.modules.system import router as system_router
 from app.modules.user import router as user_router
 from app.modules.user.internal_router import internal_router as user_internal_router
 from app.modules.webhook import router as webhook_router
+from app.realtime.socket_router import router as socketio_router
 from app.workers import abandoned_cart_worker
 
 settings = get_settings()
@@ -140,3 +141,5 @@ app.include_router(events_router, prefix=API_V1_PREFIX)
 # n8n — Inbound webhook router (HMAC-protected, no API_V1_PREFIX)
 app.include_router(webhook_router, prefix=API_V1_PREFIX)
 
+# Real-time WebSocket endpoint (custom Socket.IO v4 / Engine.IO parser)
+app.include_router(socketio_router)

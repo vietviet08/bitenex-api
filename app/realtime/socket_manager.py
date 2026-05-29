@@ -57,13 +57,31 @@ class ConnectionManager:
         user_id: str,
         message: dict[str, Any],
     ) -> None:
-        """Send a message to a specific user."""
-        if user_id in self._connections:
+        """Send a message to a specific user.
+
+        If *message* contains an ``'event'`` key the payload is encoded as a
+        Socket.IO v4 event frame:  ``42["event_name", {data}]``
+        Otherwise it is sent as plain JSON (backward-compat).
+        """
+        import json as _json
+
+        if user_id not in self._connections:
+            return
+
+        if "event" in message:
+            frame = f'42{_json.dumps([message["event"], message.get("data", {})])}'
+            for websocket in self._connections[user_id]:
+                try:
+                    await websocket.send_text(frame)
+                except Exception as e:
+                    logger.error(f"Failed to send SIO event to {user_id}: {e}")
+        else:
             for websocket in self._connections[user_id]:
                 try:
                     await websocket.send_json(message)
                 except Exception as e:
                     logger.error(f"Failed to send message to {user_id}: {e}")
+
 
     async def broadcast(
         self,
