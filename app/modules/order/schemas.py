@@ -84,6 +84,8 @@ class OrderResponse(BaseDTO, TimestampMixin):
     estimated_prep_time: int | None = None
     estimated_delivery_time: int | None = None
     items: list[OrderItemResponse] = []
+    has_driver_review: bool = False
+    has_merchant_review: bool = False
 
 
 class OrderTrackingResponse(BaseDTO):

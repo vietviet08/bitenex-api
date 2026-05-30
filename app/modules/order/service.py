@@ -236,6 +236,41 @@ class OrderService:
         response.items = [OrderItemResponse.model_validate(item) for item in items]
         return response
 
+    async def _attach_review_flags(self, responses: list[OrderResponse]) -> list[OrderResponse]:
+        order_ids = [response.id for response in responses]
+        if not order_ids:
+            return responses
+
+        driver_review_order_ids = set(
+            (
+                await self.db.execute(
+                    select(DriverReview.order_id).where(
+                        DriverReview.order_id.in_(order_ids),
+                        DriverReview.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        merchant_review_order_ids = set(
+            (
+                await self.db.execute(
+                    select(MerchantReview.order_id).where(
+                        MerchantReview.order_id.in_(order_ids),
+                        MerchantReview.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        for response in responses:
+            response.has_driver_review = response.id in driver_review_order_ids
+            response.has_merchant_review = response.id in merchant_review_order_ids
+        return responses
+
     @staticmethod
     def _to_admin_order_item(
         order: Order,
@@ -300,7 +335,7 @@ class OrderService:
         responses = [
             self._to_order_response(order, grouped_items.get(order.id, [])) for order in orders
         ]
-        return responses, total
+        return await self._attach_review_flags(responses), total
 
     async def create_order(
         self,
@@ -412,7 +447,8 @@ class OrderService:
         await JourneyService(self.db).mark_cart_checked_out_for_order(order)
         await self.db.refresh(order)
         await self._emit_order_created(order, order_items, merchant)
-        return self._to_order_response(order, order_items)
+        response = self._to_order_response(order, order_items)
+        return (await self._attach_review_flags([response]))[0]
 
     async def get_order_by_id(
         self,
@@ -429,7 +465,8 @@ class OrderService:
             actor_role=actor_role,
         )
         order_items = await self._get_order_items(order.id)
-        return self._to_order_response(order, order_items)
+        response = self._to_order_response(order, order_items)
+        return (await self._attach_review_flags([response]))[0]
 
     async def get_order_tracking(
         self,
@@ -896,7 +933,7 @@ class OrderService:
         user_id: str,
         data: DriverRatingCreate,
     ) -> OrderResponse:
-        """Submit or update a driver rating for a delivered order."""
+        """Submit a driver rating for a delivered order."""
         order = await self._get_order_model_by_id(order_id)
         if order.user_id != user_id:
             raise AuthorizationError(message="You can only rate your own orders")
@@ -917,9 +954,7 @@ class OrderService:
         ).scalar_one_or_none()
 
         if existing:
-            existing.rating = data.rating
-            existing.comment = data.comment
-            existing.tip_amount = data.tip_amount
+            raise ValidationError(message="Driver review has already been submitted for this order")
         else:
             self.db.add(
                 DriverReview(
@@ -939,7 +974,8 @@ class OrderService:
         await self.db.flush()
         await self.db.refresh(order)
         order_items = await self._get_order_items(order.id)
-        return self._to_order_response(order, order_items)
+        response = self._to_order_response(order, order_items)
+        return (await self._attach_review_flags([response]))[0]
 
     async def rate_merchant(
         self,
@@ -947,7 +983,7 @@ class OrderService:
         user_id: str,
         data: MerchantRatingCreate,
     ) -> OrderResponse:
-        """Submit or update a merchant rating for a delivered order."""
+        """Submit a merchant rating for a delivered order."""
         order = await self._get_order_model_by_id(order_id)
         if order.user_id != user_id:
             raise AuthorizationError(message="You can only rate your own orders")
@@ -968,8 +1004,7 @@ class OrderService:
         ).scalar_one_or_none()
 
         if existing:
-            existing.rating = data.rating
-            existing.comment = data.comment
+            raise ValidationError(message="Merchant review has already been submitted for this order")
         else:
             self.db.add(
                 MerchantReview(
@@ -989,7 +1024,8 @@ class OrderService:
         await invalidate_summary_cache(self.db, order.merchant_id)
         await self.db.refresh(order)
         order_items = await self._get_order_items(order.id)
-        return self._to_order_response(order, order_items)
+        response = self._to_order_response(order, order_items)
+        return (await self._attach_review_flags([response]))[0]
 
     async def _get_user_model(self, user_id: str) -> User | None:
         result = await self.db.execute(
