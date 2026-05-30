@@ -12,6 +12,7 @@ class RealtimeEventType(str, Enum):
     DISCONNECTED = "disconnected"
 
     # Order events
+    ORDER_NEW = "order.new"
     ORDER_CREATED = "order.created"
     ORDER_UPDATED = "order.updated"
     ORDER_STATUS_CHANGED = "order.status_changed"

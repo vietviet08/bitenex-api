@@ -411,6 +411,7 @@ class OrderService:
 
         await JourneyService(self.db).mark_cart_checked_out_for_order(order)
         await self.db.refresh(order)
+        await self._emit_order_created(order, order_items, merchant)
         return self._to_order_response(order, order_items)
 
     async def get_order_by_id(
@@ -709,6 +710,44 @@ class OrderService:
                 driver.user_id,
                 {"event": RealtimeEventType.ORDER_STATUS_CHANGED.value, "data": payload},
             )
+
+    async def _emit_order_created(
+        self,
+        order: "Order",
+        order_items: list[OrderItem],
+        merchant: Merchant,
+    ) -> None:
+        from app.realtime import connection_manager
+        from app.realtime.events import RealtimeEventType
+
+        customer_result = await self.db.execute(
+            select(User).where(User.id == order.user_id, User.is_deleted.is_(False))
+        )
+        customer = customer_result.scalar_one_or_none()
+        payload = {
+            "orderId": order.id,
+            "order_id": order.id,
+            "orderNumber": order.order_number,
+            "order_number": order.order_number,
+            "merchantId": order.merchant_id,
+            "merchant_id": order.merchant_id,
+            "customerName": customer.full_name if customer else "Khách hàng",
+            "items": [
+                {"name": item.name, "quantity": item.quantity}
+                for item in order_items
+            ],
+            "totalAmount": float(order.total),
+            "status": order.status,
+            "timestamp": order.created_at.isoformat() if order.created_at else None,
+        }
+        await connection_manager.send_personal(
+            merchant.user_id,
+            {"event": RealtimeEventType.ORDER_NEW.value, "data": payload},
+        )
+        await connection_manager.send_personal(
+            merchant.user_id,
+            {"event": RealtimeEventType.ORDER_CREATED.value, "data": payload},
+        )
 
     async def _mark_driver_available_after_delivery(self, driver_id: str) -> None:
         result = await self.db.execute(
