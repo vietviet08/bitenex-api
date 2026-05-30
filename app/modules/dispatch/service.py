@@ -236,14 +236,14 @@ class DispatchService:
             await self._driver_service.set_driver_online(driver_id)
 
             # Try next driver
-            order = await self._get_order(assignment.order_id)
-            if order and order.delivery_latitude and order.delivery_longitude:
+            pickup = await self._get_order_pickup_coordinates(assignment.order_id)
+            if pickup:
                 try:
                     return await self.dispatch_order(
                         DispatchRequest(
                             order_id=assignment.order_id,
-                            pickup_latitude=order.delivery_latitude,
-                            pickup_longitude=order.delivery_longitude,
+                            pickup_latitude=pickup[0],
+                            pickup_longitude=pickup[1],
                         )
                     )
                 except ValueError:
@@ -283,14 +283,15 @@ class DispatchService:
         if order is None:
             raise ValueError(f"Order {order_id} not found")
 
-        if order.delivery_latitude is None or order.delivery_longitude is None:
-            raise ValueError("Order has no delivery coordinates")
+        pickup = await self._get_order_pickup_coordinates(order_id)
+        if pickup is None:
+            raise ValueError("Order merchant has no pickup coordinates")
 
         return await self.dispatch_order(
             DispatchRequest(
                 order_id=order_id,
-                pickup_latitude=order.delivery_latitude,
-                pickup_longitude=order.delivery_longitude,
+                pickup_latitude=pickup[0],
+                pickup_longitude=pickup[1],
             )
         )
 
@@ -378,6 +379,28 @@ class DispatchService:
 
         order, merchant, item_count = row
         return order, merchant, int(item_count or 0)
+
+    async def _get_order_pickup_coordinates(
+        self,
+        order_id: str,
+    ) -> tuple[float, float] | None:
+        result = await self.db.execute(
+            select(Merchant.latitude, Merchant.longitude)
+            .join(Order, Order.merchant_id == Merchant.id)
+            .where(
+                Order.id == order_id,
+                Order.is_deleted.is_(False),
+                Merchant.is_deleted.is_(False),
+            )
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+
+        latitude, longitude = row
+        if latitude is None or longitude is None:
+            return None
+        return float(latitude), float(longitude)
 
     async def _emit_assignment(
         self,
@@ -470,19 +493,24 @@ class DispatchService:
                     )
                 )
                 order = order_result.scalar_one_or_none()
-                if (
-                    order
-                    and order.delivery_latitude
-                    and order.delivery_longitude
-                    and order.status == OrderStatus.READY.value
-                ):
+                if order and order.status == OrderStatus.READY.value:
                     dispatch_svc = DispatchService(session)
+                    pickup = await dispatch_svc._get_order_pickup_coordinates(
+                        assignment.order_id
+                    )
+                    if pickup is None:
+                        logger.warning(
+                            f"Timeout re-dispatch skipped for order {assignment.order_id}: missing pickup coordinates"
+                        )
+                        await session.commit()
+                        return
+
                     try:
                         await dispatch_svc.dispatch_order(
                             DispatchRequest(
                                 order_id=assignment.order_id,
-                                pickup_latitude=order.delivery_latitude,
-                                pickup_longitude=order.delivery_longitude,
+                                pickup_latitude=pickup[0],
+                                pickup_longitude=pickup[1],
                             )
                         )
                     except ValueError:
