@@ -14,6 +14,7 @@ from app.modules.admin import router as admin_router
 
 # Import routers
 from app.modules.auth import router as auth_router
+from app.modules.chat import router as chat_router
 from app.modules.dispatch import router as dispatch_router
 from app.modules.driver import router as driver_router
 from app.modules.events import router as events_router
@@ -118,6 +119,7 @@ app.include_router(system_router)
 
 # Core routers
 app.include_router(auth_router, prefix=API_V1_PREFIX)
+app.include_router(chat_router, prefix=API_V1_PREFIX)
 app.include_router(user_router, prefix=API_V1_PREFIX)
 app.include_router(driver_router, prefix=API_V1_PREFIX)
 app.include_router(merchant_router, prefix=API_V1_PREFIX)
