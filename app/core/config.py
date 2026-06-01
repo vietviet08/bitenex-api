@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     api_version: str = "v1"
     secret_key: str = "change-this-in-production"
 
+    # AWS S3 Settings
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_region: str = "ap-southeast-1"
+    aws_bucket_name: str | None = None
+
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/bitenex"
     database_ssl: str | None = None
     database_echo: bool = True

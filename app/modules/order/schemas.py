@@ -86,6 +86,10 @@ class OrderResponse(BaseDTO, TimestampMixin):
     items: list[OrderItemResponse] = []
     has_driver_review: bool = False
     has_merchant_review: bool = False
+    customer_name: str | None = None
+    customer_avatar_url: str | None = None
+    driver_name: str | None = None
+    driver_avatar_url: str | None = None
 
 
 class OrderTrackingResponse(BaseDTO):

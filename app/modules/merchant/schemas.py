@@ -95,6 +95,7 @@ class MenuItemBase(BaseDTO):
     price: float = Field(gt=0)
     category: str | None = Field(default=None, max_length=50)
     is_available: bool = True
+    image_url: str | None = None
 
 
 class MenuItemCreate(MenuItemBase):
@@ -111,6 +112,7 @@ class MenuItemUpdate(BaseDTO):
     price: float | None = Field(default=None, gt=0)
     category: str | None = Field(default=None, max_length=50)
     is_available: bool | None = None
+    image_url: str | None = None
 
 
 class MenuItemResponse(MenuItemBase, TimestampMixin):

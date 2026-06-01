@@ -80,7 +80,8 @@ class CallService:
         )
         self.db.add(call)
         await self.db.flush()
-        call.channel_name = f"order-{order.id}-{call.id}"
+        # Agora channel names must stay within 64 bytes. A pair of UUIDs is too long.
+        call.channel_name = f"call-{call.id}"
         await self.db.flush()
         await self.db.refresh(call)
 
@@ -91,10 +92,12 @@ class CallService:
     async def accept_call(self, call_id: str, *, actor_user_id: str) -> CallTokenResponse:
         call = await self._get_call(call_id)
         await self._expire_if_needed(call)
-        if call.status != CallStatus.RINGING.value:
-            raise ValidationError(message="Call is no longer ringing")
         if call.callee_user_id != actor_user_id:
             raise AuthorizationError(message="Only the callee can accept this call")
+        if call.status == CallStatus.ACCEPTED.value:
+            return await self._token_response(call, call.callee_role)
+        if call.status != CallStatus.RINGING.value:
+            raise ValidationError(message="Call is no longer ringing")
 
         call.status = CallStatus.ACCEPTED.value
         call.accepted_at = datetime.now(timezone.utc)

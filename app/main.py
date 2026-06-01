@@ -33,6 +33,7 @@ from app.modules.search.router import router as search_router
 from app.modules.system import router as system_router
 from app.modules.user import router as user_router
 from app.modules.user.internal_router import internal_router as user_internal_router
+from app.modules.upload import router as upload_router
 from app.modules.webhook import router as webhook_router
 from app.realtime.socket_router import router as socketio_router
 from app.workers import abandoned_cart_worker
@@ -88,6 +89,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Mount local media folder for local file storage fallback
+from fastapi.staticfiles import StaticFiles
+import os
+os.makedirs("media", exist_ok=True)
+app.mount("/media", StaticFiles(directory="media"), name="media")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,6 +139,7 @@ app.include_router(notification_router, prefix=API_V1_PREFIX)
 app.include_router(journey_public_router, prefix=API_V1_PREFIX)
 app.include_router(journey_router, prefix=API_V1_PREFIX)
 app.include_router(search_router, prefix=API_V1_PREFIX)
+app.include_router(upload_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
 
 # n8n — Internal service routers
