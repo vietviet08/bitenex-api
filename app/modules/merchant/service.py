@@ -547,6 +547,7 @@ class MerchantService:
             price=data.price,
             category=data.category,
             is_available=data.is_available,
+            image_url=data.image_url,
         )
 
         self.db.add(item)
