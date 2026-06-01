@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     firebase_credentials_path: str | None = None
     firebase_credentials_json: str | None = None
 
+    # Agora voice calls
+    agora_app_id: str | None = None
+    agora_app_certificate: str | None = None
+    agora_token_ttl_seconds: int = 3600
+    call_ring_timeout_seconds: int = 45
+
     # VNPAY (sandbox by default)
     vnp_tmn_code: str
     vnp_hash_secret: str

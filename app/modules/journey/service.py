@@ -12,8 +12,6 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.user.models import User
-from app.shared.n8n_client import N8nClient
-
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError, ValidationError
 from app.modules.journey.models import AbandonedCartJourney, JourneyOffer
@@ -366,31 +364,42 @@ class JourneyService:
         user_map = {u.id: u for u in users_result.scalars().all()}
 
         dispatched = 0
-        for journey in candidates:
-            now = self._now()
-            if journey.abandoned_at is None:
-                journey.abandoned_at = now
+        async with httpx.AsyncClient(
+            base_url=settings.n8n_base_url,
+            timeout=httpx.Timeout(10.0),
+            headers={"Content-Type": "application/json"},
+        ) as client:
+            for journey in candidates:
+                now = self._now()
+                if journey.abandoned_at is None:
+                    journey.abandoned_at = now
 
-            user = user_map.get(journey.user_id)
+                user = user_map.get(journey.user_id)
 
-            payload = {
-                "customerId": journey.user_id,
-                "checkoutSessionId": journey.cart_id,
-                "merchantName": journey.merchant_name or "Unknown Merchant",
-                "cartValue": float(journey.cart_value),
-                "currency": journey.currency,
-                "deepLink": journey.deep_link
-                or f"bitenexuser://checkout/{journey.cart_id}",
-                "email": user.email if user else "",
-                "phone": user.phone if user else "",
-            }
+                payload = {
+                    "journey": self.JOURNEY_ABANDONED_CART,
+                    "customerId": journey.user_id,
+                    "checkoutSessionId": journey.cart_id,
+                    "merchantName": journey.merchant_name or "Unknown Merchant",
+                    "cartValue": float(journey.cart_value),
+                    "currency": journey.currency,
+                    "deepLink": journey.deep_link
+                    or f"bitenexuser://checkout/{journey.cart_id}",
+                    "email": user.email if user else "",
+                    "phone": user.phone if user else "",
+                }
 
-            N8nClient.trigger(webhook_path, payload)
+                try:
+                    response = await client.post(webhook_path, json=payload)
+                    response.raise_for_status()
+                except Exception as exc:
+                    journey.last_webhook_error = str(exc)
+                    continue
 
-            journey.status = self.STATUS_ABANDONED
-            journey.webhook_triggered_at = now
-            journey.last_webhook_error = None
-            dispatched += 1
+                journey.status = self.STATUS_ABANDONED
+                journey.webhook_triggered_at = now
+                journey.last_webhook_error = None
+                dispatched += 1
 
         await self.db.flush()
 
