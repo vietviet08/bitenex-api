@@ -66,7 +66,8 @@ async def test_user_can_start_and_driver_can_accept_call(client: AsyncClient, db
     assert start_payload["agora_app_id"] == "test-agora-app-id"
     assert start_payload["agora_uid"] == 1
     assert start_payload["call"]["status"] == "RINGING"
-    assert start_payload["call"]["channel_name"].startswith(f"order-{order.id}-")
+    assert start_payload["call"]["channel_name"] == f"call-{start_payload['call']['id']}"
+    assert len(start_payload["call"]["channel_name"]) <= 64
 
     accept_response = await client.post(
         f"/api/v1/calls/{start_payload['call']['id']}/accept",
@@ -76,6 +77,42 @@ async def test_user_can_start_and_driver_can_accept_call(client: AsyncClient, db
     accept_payload = accept_response.json()
     assert accept_payload["agora_uid"] == 2
     assert accept_payload["call"]["status"] == "ACCEPTED"
+
+
+@pytest.mark.asyncio
+async def test_driver_can_start_and_user_can_accept_call_idempotently(client: AsyncClient, db_session):
+    order, driver = await _seed_assigned_order(db_session)
+
+    start_response = await client.post(
+        f"/api/v1/calls/orders/{order.id}/start",
+        headers=_auth_header(driver.user_id, Role.DRIVER),
+    )
+    assert start_response.status_code == 201
+    start_payload = start_response.json()
+    assert start_payload["agora_uid"] == 2
+    assert start_payload["call"]["caller_role"] == "DRIVER"
+    assert start_payload["call"]["callee_role"] == "USER"
+    assert start_payload["call"]["channel_name"] == f"call-{start_payload['call']['id']}"
+    assert len(start_payload["call"]["channel_name"]) <= 64
+    call_id = start_payload["call"]["id"]
+
+    accept_response = await client.post(
+        f"/api/v1/calls/{call_id}/accept",
+        headers=_auth_header(order.user_id, Role.USER),
+    )
+    assert accept_response.status_code == 200
+    accept_payload = accept_response.json()
+    assert accept_payload["agora_uid"] == 1
+    assert accept_payload["call"]["status"] == "ACCEPTED"
+
+    retry_response = await client.post(
+        f"/api/v1/calls/{call_id}/accept",
+        headers=_auth_header(order.user_id, Role.USER),
+    )
+    assert retry_response.status_code == 200
+    retry_payload = retry_response.json()
+    assert retry_payload["agora_uid"] == 1
+    assert retry_payload["call"]["status"] == "ACCEPTED"
 
 
 @pytest.mark.asyncio
