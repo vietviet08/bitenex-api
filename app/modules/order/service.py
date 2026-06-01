@@ -271,6 +271,59 @@ class OrderService:
             response.has_merchant_review = response.id in merchant_review_order_ids
         return responses
 
+    async def _attach_user_driver_metadata(self, responses: list[OrderResponse]) -> list[OrderResponse]:
+        if not responses:
+            return responses
+
+        # 1. Fetch unique customer user_ids
+        customer_ids = list(set([res.user_id for res in responses if res.user_id]))
+        customer_map = {}
+        if customer_ids:
+            customers = (
+                await self.db.execute(
+                    select(User).where(User.id.in_(customer_ids), User.is_deleted.is_(False))
+                )
+            ).scalars().all()
+            customer_map = {c.id: c for c in customers}
+
+        # 2. Fetch unique driver_ids
+        driver_ids = list(set([res.driver_id for res in responses if res.driver_id]))
+        driver_map = {}
+        driver_user_map = {}
+        if driver_ids:
+            drivers = (
+                await self.db.execute(
+                    select(Driver).where(Driver.id.in_(driver_ids), Driver.is_deleted.is_(False))
+                )
+            ).scalars().all()
+            driver_map = {d.id: d for d in drivers}
+            
+            driver_user_ids = list(set([d.user_id for d in drivers if d.user_id]))
+            if driver_user_ids:
+                driver_users = (
+                    await self.db.execute(
+                        select(User).where(User.id.in_(driver_user_ids), User.is_deleted.is_(False))
+                    )
+                ).scalars().all()
+                driver_user_map = {u.id: u for u in driver_users}
+
+        for response in responses:
+            # Attach customer metadata
+            cust = customer_map.get(response.user_id)
+            if cust:
+                response.customer_name = cust.full_name
+                response.customer_avatar_url = cust.avatar_url
+
+            # Attach driver metadata
+            drv = driver_map.get(response.driver_id)
+            if drv:
+                drv_usr = driver_user_map.get(drv.user_id)
+                if drv_usr:
+                    response.driver_name = drv_usr.full_name
+                    response.driver_avatar_url = drv_usr.avatar_url
+
+        return responses
+
     @staticmethod
     def _to_admin_order_item(
         order: Order,
@@ -335,7 +388,9 @@ class OrderService:
         responses = [
             self._to_order_response(order, grouped_items.get(order.id, [])) for order in orders
         ]
-        return await self._attach_review_flags(responses), total
+        flagged = await self._attach_review_flags(responses)
+        annotated = await self._attach_user_driver_metadata(flagged)
+        return annotated, total
 
     async def create_order(
         self,
@@ -448,7 +503,9 @@ class OrderService:
         await self.db.refresh(order)
         await self._emit_order_created(order, order_items, merchant)
         response = self._to_order_response(order, order_items)
-        return (await self._attach_review_flags([response]))[0]
+        flagged = await self._attach_review_flags([response])
+        annotated = await self._attach_user_driver_metadata(flagged)
+        return annotated[0]
 
     async def get_order_by_id(
         self,
@@ -466,7 +523,9 @@ class OrderService:
         )
         order_items = await self._get_order_items(order.id)
         response = self._to_order_response(order, order_items)
-        return (await self._attach_review_flags([response]))[0]
+        flagged = await self._attach_review_flags([response])
+        annotated = await self._attach_user_driver_metadata(flagged)
+        return annotated[0]
 
     async def get_order_tracking(
         self,
@@ -549,7 +608,9 @@ class OrderService:
             actor_role=actor_role,
         )
         order_items = await self._get_order_items(order.id)
-        return self._to_order_response(order, order_items)
+        response = self._to_order_response(order, order_items)
+        responses = await self._attach_user_driver_metadata([response])
+        return responses[0]
 
     async def update_status(
         self,
@@ -576,7 +637,9 @@ class OrderService:
 
         if current_status == new_status:
             order_items = await self._get_order_items(order.id)
-            return self._to_order_response(order, order_items)
+            response = self._to_order_response(order, order_items)
+            responses = await self._attach_user_driver_metadata([response])
+            return responses[0]
 
         if not self._validate_status_transition(current_status, new_status):
             raise InvalidStateTransitionError(
@@ -645,7 +708,9 @@ class OrderService:
             await self._emit_order_status(order)
 
         order_items = await self._get_order_items(order.id)
-        return self._to_order_response(order, order_items)
+        response = self._to_order_response(order, order_items)
+        responses = await self._attach_user_driver_metadata([response])
+        return responses[0]
 
     async def _auto_dispatch(self, order_id: str) -> None:
         """Background task: dispatch the nearest driver when order is READY."""
@@ -975,7 +1040,9 @@ class OrderService:
         await self.db.refresh(order)
         order_items = await self._get_order_items(order.id)
         response = self._to_order_response(order, order_items)
-        return (await self._attach_review_flags([response]))[0]
+        flagged = await self._attach_review_flags([response])
+        annotated = await self._attach_user_driver_metadata(flagged)
+        return annotated[0]
 
     async def rate_merchant(
         self,
@@ -1025,7 +1092,9 @@ class OrderService:
         await self.db.refresh(order)
         order_items = await self._get_order_items(order.id)
         response = self._to_order_response(order, order_items)
-        return (await self._attach_review_flags([response]))[0]
+        flagged = await self._attach_review_flags([response])
+        annotated = await self._attach_user_driver_metadata(flagged)
+        return annotated[0]
 
     async def _get_user_model(self, user_id: str) -> User | None:
         result = await self.db.execute(
