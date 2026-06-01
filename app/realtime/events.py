@@ -36,6 +36,13 @@ class RealtimeEventType(str, Enum):
     CHAT_MESSAGE = "chat.message"
     CHAT_TYPING = "chat.typing"
 
+    # Call events
+    CALL_INVITED = "call.invited"
+    CALL_ACCEPTED = "call.accepted"
+    CALL_REJECTED = "call.rejected"
+    CALL_ENDED = "call.ended"
+    CALL_MISSED = "call.missed"
+
     # Notification events
     NOTIFICATION_NEW = "notification.new"
 

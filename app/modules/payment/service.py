@@ -25,7 +25,7 @@ from app.core.exceptions import (
 from app.modules.order.models import Order, OrderStatusHistory
 from app.modules.payment.models import IdempotencyKey, Payment
 from app.modules.payment.models import PaymentMethod as PaymentMethodModel
-from app.modules.payment.models import Refund, WebhookEvent
+from app.modules.payment.models import Refund, WebhookEvent as WebhookEventModel
 from app.modules.payment.repository import PaymentRepository
 from app.modules.payment.schemas import (
     AddPaymentMethodRequest,
@@ -712,7 +712,7 @@ class PaymentService:
         if not event_id:
             raise ValidationError(message="Missing VNPAY event identity")
 
-        webhook_event = WebhookEvent(
+        webhook_event = WebhookEventModel(
             gateway=normalized_gateway,
             event_id=event_id,
             event_type=str(

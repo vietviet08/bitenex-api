@@ -23,6 +23,10 @@ os.environ["DEBUG"] = "true"
 os.environ.setdefault("INTERNAL_API_TOKEN", "TEST_INTERNAL_TOKEN")
 os.environ.setdefault("ABANDONED_CART_N8N_WEBHOOK_URL", "https://example.com/webhook/cart-abandoned")
 os.environ.setdefault("N8N_WEBHOOK_SECRET", "test-n8n-secret")
+os.environ.setdefault("AGORA_APP_ID", "test-agora-app-id")
+os.environ.setdefault("AGORA_APP_CERTIFICATE", "test-agora-app-certificate")
+os.environ.setdefault("AGORA_TOKEN_TTL_SECONDS", "3600")
+os.environ.setdefault("CALL_RING_TIMEOUT_SECONDS", "45")
 
 from app.core.database import Base, get_db
 from app.core.security import create_access_token
