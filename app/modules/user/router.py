@@ -185,3 +185,17 @@ async def admin_activate_user(
     """Activate a user account. Admin only."""
     await service.set_user_active(user_id, is_active=True)
     return MessageResponse(message="User activated successfully")
+
+
+@router.get(
+    "/admin/{user_id}/addresses",
+    response_model=list[AddressResponse],
+    summary="Get user addresses",
+    dependencies=[RequireAdmin],
+)
+async def admin_get_user_addresses(
+    user_id: str,
+    service: UserService = Depends(get_user_service),
+) -> list[AddressResponse]:
+    """Get user's saved addresses. Admin only."""
+    return await service.get_addresses(user_id)
