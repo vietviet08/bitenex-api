@@ -4,11 +4,12 @@
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.driver.models import Driver, DriverLocation, DriverReview
 from app.modules.driver.schemas import (
+    AdminDriverResponse,
     DriverCreate,
     DriverEarningActivityResponse,
     DriverEarningsResponse,
@@ -440,3 +441,64 @@ class DriverService:
             driver.status = DriverStatus.OFFLINE.value
             driver.is_approved = False
             await self.db.flush()
+
+    async def admin_list_drivers(
+        self,
+        search: str | None = None,
+        status: str | None = None,
+        is_approved: bool | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[AdminDriverResponse], int]:
+        """List drivers for admin with search and filters."""
+        # Always join with User to get user details
+        query = (
+            select(Driver, User.full_name, User.email, User.phone)
+            .join(User, User.id == Driver.user_id)
+            .where(Driver.is_deleted.is_(False), User.is_deleted.is_(False))
+        )
+
+        # Search by user name or vehicle plate
+        if search:
+            search_term = f"%{search}%"
+            query = query.where(
+                or_(
+                    User.full_name.ilike(search_term),
+                    Driver.vehicle_plate.ilike(search_term),
+                )
+            )
+
+        # Filter by status
+        if status:
+            query = query.where(Driver.status == status)
+
+        # Filter by approval status
+        if is_approved is not None:
+            query = query.where(Driver.is_approved == is_approved)
+
+        # Count total matching
+        count_query = select(func.count()).select_from(
+            query.with_only_columns(Driver.id).subquery()
+        )
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        # Paginate
+        query = query.order_by(Driver.created_at.desc())
+        query = query.offset((page - 1) * per_page).limit(per_page)
+
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        drivers = []
+        for driver, user_name, user_email, user_phone in rows:
+            driver_resp = DriverResponse.model_validate(driver)
+            admin_resp = AdminDriverResponse(
+                **driver_resp.model_dump(),
+                user_name=user_name,
+                user_email=user_email,
+                user_phone=user_phone,
+            )
+            drivers.append(admin_resp)
+
+        return drivers, total
