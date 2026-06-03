@@ -9,6 +9,10 @@ from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin
 from app.core.exceptions import NotFoundError
 from app.modules.admin.schemas import (
+    AIModelListRequest,
+    AIModelListResponse,
+    AISettingsResponse,
+    AISettingsUpdate,
     AuditLogListResponse,
     DashboardStats,
     DriverStatsResponse,
@@ -164,3 +168,45 @@ async def update_config(
 ) -> SystemConfigResponse:
     """Update a system configuration value."""
     return await service.update_config(key, data, user.user_id)
+
+
+# =============================================================================
+# AI Settings
+# =============================================================================
+@router.get(
+    "/ai-settings",
+    response_model=AISettingsResponse,
+    summary="Get AI provider settings",
+)
+async def get_ai_settings(
+    service: AdminService = Depends(get_admin_service),
+) -> AISettingsResponse:
+    """Get OpenAI-compatible provider settings without exposing the API key."""
+    return await service.get_ai_settings()
+
+
+@router.put(
+    "/ai-settings",
+    response_model=AISettingsResponse,
+    summary="Update AI provider settings",
+)
+async def update_ai_settings(
+    data: AISettingsUpdate,
+    user: CurrentUser,
+    service: AdminService = Depends(get_admin_service),
+) -> AISettingsResponse:
+    """Update OpenAI-compatible provider settings."""
+    return await service.update_ai_settings(data, user.user_id)
+
+
+@router.post(
+    "/ai-settings/models",
+    response_model=AIModelListResponse,
+    summary="Load AI provider models",
+)
+async def list_ai_models(
+    data: AIModelListRequest,
+    service: AdminService = Depends(get_admin_service),
+) -> AIModelListResponse:
+    """Load available models using supplied or saved provider credentials."""
+    return await service.list_ai_models(api_key=data.api_key, base_url=data.base_url)

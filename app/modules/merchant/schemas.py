@@ -133,6 +133,23 @@ class MenuListResponse(BaseDTO):
     per_page: int
 
 
+class MenuDescriptionGenerateRequest(BaseDTO):
+    """Generate a menu item description with AI."""
+
+    name: str = Field(min_length=1, max_length=100)
+    category: str | None = Field(default=None, max_length=50)
+    price: float | None = Field(default=None, gt=0)
+    existing_description: str | None = Field(default=None, max_length=500)
+    tone: Literal["appetizing", "premium", "casual", "healthy"] = "appetizing"
+
+
+class MenuDescriptionGenerateResponse(BaseDTO):
+    """AI-generated menu item description."""
+
+    description: str
+    model: str
+
+
 class AdminMerchantDetailResponse(BaseDTO):
     """Admin merchant detail response with merchant profile and menu context."""
 

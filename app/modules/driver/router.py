@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import CurrentUser, RequireAdmin, RequireDriver
 from app.core.exceptions import NotFoundError
 from app.modules.driver.schemas import (
+    AdminDriverResponse,
     DriverCreate,
     DriverEarningsResponse,
     DriverLocationUpdate,
@@ -152,6 +153,31 @@ async def get_nearby_drivers(
 ) -> list[NearbyDriverResponse]:
     """Find available drivers near a location. Admin/internal use."""
     return await service.get_nearby_drivers(latitude, longitude, radius_km)
+
+
+@router.get(
+    "/admin/list",
+    response_model=list[AdminDriverResponse],
+    summary="Admin list drivers",
+    dependencies=[RequireAdmin],
+)
+async def admin_list_drivers(
+    search: str | None = None,
+    status: str | None = None,
+    is_approved: bool | None = None,
+    page: int = 1,
+    per_page: int = 20,
+    service: DriverService = Depends(get_driver_service),
+) -> list[AdminDriverResponse]:
+    """List drivers for admin management with search and filters."""
+    items, total = await service.admin_list_drivers(
+        search=search,
+        status=status,
+        is_approved=is_approved,
+        page=page,
+        per_page=per_page,
+    )
+    return items
 
 
 @router.get(

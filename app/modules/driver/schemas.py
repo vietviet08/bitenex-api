@@ -44,6 +44,14 @@ class DriverResponse(DriverBase, TimestampMixin):
     average_rating: float
 
 
+class AdminDriverResponse(DriverResponse):
+    """Admin driver response with user details."""
+
+    user_name: str | None = None
+    user_email: str | None = None
+    user_phone: str | None = None
+
+
 class DriverLocationUpdate(BaseDTO):
     """Driver location update request."""
 

@@ -14,12 +14,15 @@ import re
 import statistics
 from typing import Optional
 
-import httpx
-from openai import AsyncOpenAI, OpenAIError
+from openai import OpenAIError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.modules.admin.ai_settings import (
+    create_ai_client,
+    create_chat_completion_with_retry,
+    get_ai_runtime_settings,
+)
 from app.modules.merchant.models import Merchant, MerchantReview, MerchantReviewSummaryCache
 from app.modules.merchant.schemas import (
     ReviewListResponse,
@@ -28,7 +31,6 @@ from app.modules.merchant.schemas import (
 )
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # ---------------------------------------------------------------------------
 # LLM Configuration
@@ -54,16 +56,6 @@ Quy tắc quan trọng:
 - Sử dụng ngôn ngữ tự nhiên, thân thiện như đang tư vấn cho bạn bè"""
 
 
-def _get_llm_client() -> Optional[AsyncOpenAI]:
-    if not settings.openai_api_key:
-        return None
-    return AsyncOpenAI(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
-        http_client=httpx.AsyncClient(timeout=_LLM_TIMEOUT),
-    )
-
-
 def _format_reviews_for_llm(reviews: list[MerchantReview], merchant_name: str) -> str:
     """Format reviews into a compact text block for the LLM prompt."""
     lines = [f"Nhà hàng: {merchant_name}"]
@@ -80,14 +72,16 @@ def _format_reviews_for_llm(reviews: list[MerchantReview], merchant_name: str) -
 
 
 async def _call_llm_summarize(
+    db: AsyncSession,
     reviews: list[MerchantReview],
     merchant_name: str,
 ) -> Optional[dict]:
     """Call the LLM and parse the JSON response. Returns None on failure."""
-    client = _get_llm_client()
-    if client is None:
+    runtime_settings = await get_ai_runtime_settings(db)
+    if runtime_settings is None:
         logger.warning("[ReviewSummarizer] No LLM client configured")
         return None
+    client = create_ai_client(runtime_settings, _LLM_TIMEOUT)
 
     review_text = _format_reviews_for_llm(reviews[:_MAX_REVIEWS_FOR_SUMMARY], merchant_name)
     avg = statistics.mean(r.rating for r in reviews) if reviews else 0
@@ -97,8 +91,9 @@ async def _call_llm_summarize(
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=settings.openai_chat_model,
+        response = await create_chat_completion_with_retry(
+            client,
+            model=runtime_settings.chat_model,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
@@ -292,7 +287,7 @@ async def get_ai_summary(
     # --- Step 3: Call LLM ---
     llm_result = None
     if len(reviews) >= 3:
-        llm_result = await _call_llm_summarize(reviews, merchant_name)
+        llm_result = await _call_llm_summarize(db, reviews, merchant_name)
 
     # --- Step 4: Fallback if LLM unavailable or too few reviews ---
     if llm_result is None:

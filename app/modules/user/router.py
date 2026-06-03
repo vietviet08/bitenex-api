@@ -12,6 +12,8 @@ from app.modules.user.schemas import (
     AddressResponse,
     AdminUserListResponse,
     AdminUserUpdate,
+    FavoriteListResponse,
+    FavoriteMerchantResponse,
     UserResponse,
     UserUpdate,
 )
@@ -115,6 +117,67 @@ async def delete_address(
 
 
 # =============================================================================
+# Favorites Endpoints
+# =============================================================================
+@router.get(
+    "/profile/favorites",
+    response_model=FavoriteListResponse,
+    summary="Get my favorite merchants",
+)
+async def get_my_favorites(
+    user: CurrentUser,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    service: UserService = Depends(get_user_service),
+) -> FavoriteListResponse:
+    """Get the current user's favorited merchants."""
+    return await service.get_favorites(user.user_id, page=page, per_page=per_page)
+
+
+@router.get(
+    "/profile/favorite-ids",
+    response_model=list[str],
+    summary="Get my favorite merchant IDs",
+)
+async def get_my_favorite_ids(
+    user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> list[str]:
+    """Get list of merchant IDs the user has favorited. Lightweight endpoint for hydrating UI."""
+    return await service.get_favorite_merchant_ids(user.user_id)
+
+
+@router.post(
+    "/profile/favorites/{merchant_id}",
+    response_model=FavoriteMerchantResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add merchant to favorites",
+)
+async def add_favorite(
+    merchant_id: str,
+    user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> FavoriteMerchantResponse:
+    """Add a merchant to the current user's favorites."""
+    return await service.add_favorite(user.user_id, merchant_id)
+
+
+@router.delete(
+    "/profile/favorites/{merchant_id}",
+    response_model=MessageResponse,
+    summary="Remove merchant from favorites",
+)
+async def remove_favorite(
+    merchant_id: str,
+    user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> MessageResponse:
+    """Remove a merchant from the current user's favorites."""
+    await service.remove_favorite(user.user_id, merchant_id)
+    return MessageResponse(message="Removed from favorites")
+
+
+# =============================================================================
 # Admin User Management Endpoints
 # =============================================================================
 @router.get(
@@ -185,3 +248,17 @@ async def admin_activate_user(
     """Activate a user account. Admin only."""
     await service.set_user_active(user_id, is_active=True)
     return MessageResponse(message="User activated successfully")
+
+
+@router.get(
+    "/admin/{user_id}/addresses",
+    response_model=list[AddressResponse],
+    summary="Get user addresses",
+    dependencies=[RequireAdmin],
+)
+async def admin_get_user_addresses(
+    user_id: str,
+    service: UserService = Depends(get_user_service),
+) -> list[AddressResponse]:
+    """Get user's saved addresses. Admin only."""
+    return await service.get_addresses(user_id)
