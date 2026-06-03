@@ -7,7 +7,7 @@ from email.utils import parsedate_to_datetime
 from typing import TypeVar
 
 import httpx
-from openai import APIStatusError, AsyncOpenAI
+from openai import APIStatusError, APITimeoutError, AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,7 +84,11 @@ def _retry_after_seconds(exc: APIStatusError) -> float | None:
     return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
 
 
-def _retry_delay_seconds(exc: APIStatusError, attempt: int) -> float:
+def _retry_delay_seconds(exc: APIStatusError | None, attempt: int) -> float:
+    if exc is None:
+        backoff = _AI_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+        return min(backoff, _AI_RETRY_MAX_DELAY_SECONDS)
+
     provider_delay = _retry_after_seconds(exc)
     if provider_delay is not None:
         return min(provider_delay, _AI_RETRY_MAX_DELAY_SECONDS)
@@ -99,7 +103,7 @@ async def run_ai_request_with_retry(
     operation_name: str,
     retry_attempts: int = _AI_RETRY_ATTEMPTS,
 ) -> _T:
-    """Run an AI provider request with explicit retries for provider 429 responses."""
+    """Run an AI provider request with explicit retries for 429 and timeout responses."""
     for attempt in range(1, retry_attempts + 1):
         try:
             return await operation()
@@ -110,6 +114,19 @@ async def run_ai_request_with_retry(
             delay = _retry_delay_seconds(exc, attempt)
             logger.warning(
                 "[AI] Provider returned 429 for %s; retrying in %.1fs (attempt %d/%d)",
+                operation_name,
+                delay,
+                attempt + 1,
+                retry_attempts,
+            )
+            await asyncio.sleep(delay)
+        except APITimeoutError:
+            if attempt >= retry_attempts:
+                raise
+
+            delay = _retry_delay_seconds(None, attempt)
+            logger.warning(
+                "[AI] Provider timed out for %s; retrying in %.1fs (attempt %d/%d)",
                 operation_name,
                 delay,
                 attempt + 1,
@@ -129,7 +146,7 @@ async def create_chat_completion_with_retry(
     temperature: float,
     retry_attempts: int = _AI_RETRY_ATTEMPTS,
 ) -> ChatCompletion:
-    """Create a chat completion with explicit retries for provider 429 responses."""
+    """Create a chat completion with explicit retries for 429 and timeout responses."""
 
     async def create_completion() -> ChatCompletion:
         return await client.chat.completions.create(
