@@ -92,6 +92,7 @@ class ChatMessageData(BaseModel):
     receiver_id: str
     content: str
     message_type: str = "text"
+    media_url: str | None = None
 
 
 def get_order_room(order_id: str) -> str:

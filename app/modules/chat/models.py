@@ -5,7 +5,7 @@ from app.modules.base import BaseModel
 
 
 class ChatMessage(BaseModel):
-    """Persisted text message for an order-scoped conversation."""
+    """Persisted message for an order-scoped conversation."""
 
     __tablename__ = "chat_messages"
 
@@ -15,3 +15,4 @@ class ChatMessage(BaseModel):
     sender_role: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     message_type: Mapped[str] = mapped_column(String(20), default="text", nullable=False)
+    media_url: Mapped[str | None] = mapped_column(Text, nullable=True)

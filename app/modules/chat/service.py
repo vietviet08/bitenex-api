@@ -7,6 +7,7 @@ from app.modules.chat.schemas import (
     ChatConversationType,
     ChatMessageCreate,
     ChatMessageResponse,
+    ChatMessageType,
 )
 from app.modules.driver.models import Driver
 from app.modules.merchant.models import Merchant
@@ -89,8 +90,11 @@ class ChatService:
             conversation_type=_conversation_value(data.conversation_type),
             sender_user_id=actor_user_id,
             sender_role=_role_value(actor_role),
-            content=data.content,
-            message_type="text",
+            content=data.content or "",
+            message_type=data.message_type.value
+            if isinstance(data.message_type, ChatMessageType)
+            else str(data.message_type),
+            media_url=data.media_url,
         )
         self.db.add(message)
         await self.db.flush()
@@ -225,7 +229,8 @@ class ChatService:
                 if users_by_id.get(message.sender_user_id)
                 else None,
                 content=message.content,
-                message_type=message.message_type,
+                message_type=ChatMessageType(message.message_type),
+                media_url=message.media_url,
                 created_at=message.created_at,
             )
             for message in messages
