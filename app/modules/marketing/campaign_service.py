@@ -16,6 +16,11 @@ from app.modules.marketing.schemas import (
     CampaignStatsResponse,
     CampaignUpdate,
 )
+from app.shared.utils import ensure_utc
+
+
+def _as_utc(value: datetime) -> datetime:
+    return ensure_utc(value).astimezone(timezone.utc)
 
 
 class CampaignService:
@@ -76,8 +81,11 @@ class CampaignService:
         created_by: str,
     ) -> CampaignResponse:
         """Create a new campaign."""
+        start_date = _as_utc(data.start_date)
+        end_date = _as_utc(data.end_date)
+
         # Validate dates
-        if data.end_date <= data.start_date:
+        if end_date <= start_date:
             raise ValidationError(message="End date must be after start date")
 
         # Check voucher code uniqueness
@@ -93,7 +101,7 @@ class CampaignService:
 
         # Determine status based on start date
         now = datetime.now(timezone.utc)
-        status = "SCHEDULED" if data.start_date > now else "ACTIVE"
+        status = "SCHEDULED" if start_date > now else "ACTIVE"
 
         campaign = Campaign(
             name=data.name,
@@ -107,8 +115,8 @@ class CampaignService:
             auto_generate_vouchers=data.auto_generate_vouchers,
             max_vouchers=data.max_vouchers,
             target_audience=data.target_audience,
-            start_date=data.start_date,
-            end_date=data.end_date,
+            start_date=start_date,
+            end_date=end_date,
             budget=data.budget,
             is_featured=data.is_featured,
             status=status,
@@ -141,6 +149,18 @@ class CampaignService:
             raise ValidationError(message="Can only update DRAFT or SCHEDULED campaigns")
 
         update_data = data.model_dump(exclude_unset=True)
+        for date_field in ("start_date", "end_date"):
+            if date_field not in update_data:
+                continue
+            if update_data[date_field] is None:
+                raise ValidationError(message=f"{date_field} is required")
+            update_data[date_field] = _as_utc(update_data[date_field])
+
+        start_date = update_data.get("start_date", campaign.start_date)
+        end_date = update_data.get("end_date", campaign.end_date)
+        if _as_utc(end_date) <= _as_utc(start_date):
+            raise ValidationError(message="End date must be after start date")
+
         for field, value in update_data.items():
             setattr(campaign, field, value)
 
