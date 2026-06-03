@@ -22,6 +22,7 @@ from app.modules.events import router as events_router
 from app.modules.journey import public_router as journey_public_router
 from app.modules.journey import router as journey_router
 from app.modules.marketing import router as marketing_router
+from app.modules.marketing.admin_router import router as campaign_admin_router
 from app.modules.merchant import router as merchant_router
 from app.modules.merchant.internal_router import internal_router as merchant_internal_router
 from app.modules.notification import router as notification_router
@@ -141,6 +142,7 @@ app.include_router(journey_router, prefix=API_V1_PREFIX)
 app.include_router(search_router, prefix=API_V1_PREFIX)
 app.include_router(upload_router, prefix=API_V1_PREFIX)
 app.include_router(admin_router, prefix=API_V1_PREFIX)
+app.include_router(campaign_admin_router, prefix=API_V1_PREFIX)
 
 # n8n — Internal service routers
 app.include_router(order_internal_router, prefix=API_V1_PREFIX)
