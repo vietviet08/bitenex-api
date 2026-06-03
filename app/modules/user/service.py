@@ -6,11 +6,14 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.modules.user.models import User, UserAddress
+from app.modules.merchant.models import Merchant
+from app.modules.user.models import User, UserAddress, UserFavoriteMerchant
 from app.modules.user.schemas import (
     AddressCreate,
     AddressResponse,
     AdminUserUpdate,
+    FavoriteListResponse,
+    FavoriteMerchantResponse,
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -232,3 +235,143 @@ class UserService:
 
         address.soft_delete()
         await self.db.commit()
+
+    # =========================================================================
+    # Favorites management
+    # =========================================================================
+    async def get_favorites(
+        self,
+        user_id: str,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> FavoriteListResponse:
+        """Get user's favorited merchants with merchant details."""
+        base_query = (
+            select(UserFavoriteMerchant, Merchant)
+            .join(Merchant, Merchant.id == UserFavoriteMerchant.merchant_id)
+            .where(
+                UserFavoriteMerchant.user_id == user_id,
+                UserFavoriteMerchant.is_deleted.is_(False),
+                Merchant.is_deleted.is_(False),
+            )
+        )
+
+        # Count total
+        count_result = await self.db.execute(
+            select(func.count()).select_from(
+                select(UserFavoriteMerchant)
+                .where(
+                    UserFavoriteMerchant.user_id == user_id,
+                    UserFavoriteMerchant.is_deleted.is_(False),
+                )
+                .subquery()
+            )
+        )
+        total = count_result.scalar() or 0
+
+        # Paginate
+        query = base_query.order_by(UserFavoriteMerchant.created_at.desc())
+        query = query.offset((page - 1) * per_page).limit(per_page)
+
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        items = [
+            FavoriteMerchantResponse(
+                id=fav.id,
+                merchant_id=merchant.id,
+                name=merchant.name,
+                logo_url=merchant.logo_url,
+                cover_image_url=merchant.cover_image_url,
+                average_rating=merchant.average_rating,
+                delivery_fee=merchant.delivery_fee,
+                estimated_prep_time=merchant.estimated_prep_time,
+                address=merchant.address,
+                city=merchant.city,
+            )
+            for fav, merchant in rows
+        ]
+        return FavoriteListResponse(items=items, total=total)
+
+    async def add_favorite(self, user_id: str, merchant_id: str) -> FavoriteMerchantResponse:
+        """Add a merchant to user's favorites. Idempotent — re-activates if soft-deleted."""
+        # Check if already favorited (including soft-deleted)
+        result = await self.db.execute(
+            select(UserFavoriteMerchant).where(
+                UserFavoriteMerchant.user_id == user_id,
+                UserFavoriteMerchant.merchant_id == merchant_id,
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            if existing.is_deleted:
+                # Re-activate soft-deleted record
+                existing.restore()
+                await self.db.commit()
+                await self.db.refresh(existing)
+            # else: already favorited — return as-is
+        else:
+            # Verify merchant exists
+            merchant_result = await self.db.execute(
+                select(Merchant).where(
+                    Merchant.id == merchant_id,
+                    Merchant.is_deleted.is_(False),
+                )
+            )
+            merchant = merchant_result.scalar_one_or_none()
+            if not merchant:
+                raise NotFoundError("Merchant", merchant_id)
+
+            existing = UserFavoriteMerchant(
+                user_id=user_id,
+                merchant_id=merchant_id,
+            )
+            self.db.add(existing)
+            await self.db.commit()
+            await self.db.refresh(existing)
+
+        # Fetch full merchant details
+        merchant_result = await self.db.execute(
+            select(Merchant).where(Merchant.id == merchant_id)
+        )
+        merchant = merchant_result.scalar_one()
+
+        return FavoriteMerchantResponse(
+            id=existing.id,
+            merchant_id=merchant.id,
+            name=merchant.name,
+            logo_url=merchant.logo_url,
+            cover_image_url=merchant.cover_image_url,
+            average_rating=merchant.average_rating,
+            delivery_fee=merchant.delivery_fee,
+            estimated_prep_time=merchant.estimated_prep_time,
+            address=merchant.address,
+            city=merchant.city,
+        )
+
+    async def remove_favorite(self, user_id: str, merchant_id: str) -> None:
+        """Remove a merchant from user's favorites (soft delete)."""
+        result = await self.db.execute(
+            select(UserFavoriteMerchant).where(
+                UserFavoriteMerchant.user_id == user_id,
+                UserFavoriteMerchant.merchant_id == merchant_id,
+                UserFavoriteMerchant.is_deleted.is_(False),
+            )
+        )
+        fav = result.scalar_one_or_none()
+        if not fav:
+            return  # Already removed — idempotent
+
+        fav.soft_delete()
+        await self.db.commit()
+
+    async def get_favorite_merchant_ids(self, user_id: str) -> list[str]:
+        """Return list of merchant IDs the user has favorited. Used for fast isFavorite checks."""
+        result = await self.db.execute(
+            select(UserFavoriteMerchant.merchant_id).where(
+                UserFavoriteMerchant.user_id == user_id,
+                UserFavoriteMerchant.is_deleted.is_(False),
+            )
+        )
+        return list(result.scalars().all())

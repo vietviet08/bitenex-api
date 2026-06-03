@@ -90,3 +90,30 @@ class AddressResponse(AddressBase, TimestampMixin):
 
     id: str
     user_id: str
+
+
+# =============================================================================
+# Favorites Schemas
+# =============================================================================
+
+
+class FavoriteMerchantResponse(BaseDTO):
+    """Merchant data returned in the user favorites list."""
+
+    id: str
+    merchant_id: str
+    name: str
+    logo_url: str | None = None
+    cover_image_url: str | None = None
+    average_rating: float
+    delivery_fee: float
+    estimated_prep_time: int
+    address: str
+    city: str
+
+
+class FavoriteListResponse(BaseDTO):
+    """Paginated list of favorite merchants."""
+
+    items: list[FavoriteMerchantResponse]
+    total: int

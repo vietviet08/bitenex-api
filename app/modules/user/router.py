@@ -12,6 +12,8 @@ from app.modules.user.schemas import (
     AddressResponse,
     AdminUserListResponse,
     AdminUserUpdate,
+    FavoriteListResponse,
+    FavoriteMerchantResponse,
     UserResponse,
     UserUpdate,
 )
@@ -112,6 +114,67 @@ async def delete_address(
     """Delete a saved address."""
     await service.delete_address(user.user_id, address_id)
     return MessageResponse(message="Address deleted successfully")
+
+
+# =============================================================================
+# Favorites Endpoints
+# =============================================================================
+@router.get(
+    "/profile/favorites",
+    response_model=FavoriteListResponse,
+    summary="Get my favorite merchants",
+)
+async def get_my_favorites(
+    user: CurrentUser,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    service: UserService = Depends(get_user_service),
+) -> FavoriteListResponse:
+    """Get the current user's favorited merchants."""
+    return await service.get_favorites(user.user_id, page=page, per_page=per_page)
+
+
+@router.get(
+    "/profile/favorite-ids",
+    response_model=list[str],
+    summary="Get my favorite merchant IDs",
+)
+async def get_my_favorite_ids(
+    user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> list[str]:
+    """Get list of merchant IDs the user has favorited. Lightweight endpoint for hydrating UI."""
+    return await service.get_favorite_merchant_ids(user.user_id)
+
+
+@router.post(
+    "/profile/favorites/{merchant_id}",
+    response_model=FavoriteMerchantResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add merchant to favorites",
+)
+async def add_favorite(
+    merchant_id: str,
+    user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> FavoriteMerchantResponse:
+    """Add a merchant to the current user's favorites."""
+    return await service.add_favorite(user.user_id, merchant_id)
+
+
+@router.delete(
+    "/profile/favorites/{merchant_id}",
+    response_model=MessageResponse,
+    summary="Remove merchant from favorites",
+)
+async def remove_favorite(
+    merchant_id: str,
+    user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> MessageResponse:
+    """Remove a merchant from the current user's favorites."""
+    await service.remove_favorite(user.user_id, merchant_id)
+    return MessageResponse(message="Removed from favorites")
 
 
 # =============================================================================

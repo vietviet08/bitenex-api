@@ -2,7 +2,7 @@
 # User Module - ORM Models
 # =============================================================================
 
-from sqlalchemy import Boolean, String, Text
+from sqlalchemy import Boolean, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.modules.base import BaseModel
@@ -65,6 +65,31 @@ class User(BaseModel):
         Boolean,
         default=False,
         nullable=False,
+    )
+
+
+class UserFavoriteMerchant(BaseModel):
+    """
+    User favorite merchant join table.
+    Records which merchants a user has "hearted".
+    Unique per (user_id, merchant_id) pair.
+    """
+
+    __tablename__ = "user_favorite_merchants"
+    __table_args__ = (
+        UniqueConstraint("user_id", "merchant_id", name="uq_user_favorite_merchant"),
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+    )
+
+    merchant_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
     )
 
 
