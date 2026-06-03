@@ -10,6 +10,8 @@ from app.core.dependencies import CurrentUser, RequireAdmin, RequireMerchant
 from app.modules.merchant.schemas import (
     AdminMerchantDetailResponse,
     AdminMerchantListResponse,
+    MenuDescriptionGenerateRequest,
+    MenuDescriptionGenerateResponse,
     MenuItemCreate,
     MenuItemDetailResponse,
     MenuItemResponse,
@@ -146,6 +148,23 @@ async def list_owner_menu(
         page=page,
         per_page=per_page,
     )
+
+
+@router.post(
+    "/owner/menu/ai-description",
+    response_model=MenuDescriptionGenerateResponse,
+    summary="Generate menu item description with AI",
+    dependencies=[RequireMerchant],
+)
+async def generate_owner_menu_description(
+    data: MenuDescriptionGenerateRequest,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> MenuDescriptionGenerateResponse:
+    """Generate an editable Vietnamese menu item description for the current merchant."""
+    from app.modules.merchant.menu_ai_service import generate_menu_description
+
+    return await generate_menu_description(db, owner_user_id=user.user_id, data=data)
 
 
 @router.post(
