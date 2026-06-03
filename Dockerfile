@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appgroup && \
-    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser && \
+    chown appuser:appgroup /app
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv

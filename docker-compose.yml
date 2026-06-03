@@ -38,7 +38,6 @@ services:
         volumes:
             - postgres_data:/var/lib/postgresql/data
             - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-            - ./scripts/init-sonarqube-db.sh:/docker-entrypoint-initdb.d/init-sonarqube-db.sh:ro
         networks:
             - bitenex-network
         healthcheck:
@@ -73,34 +72,9 @@ services:
             - "5678:5678"
         env_file:
             - .env.docker
-        environment:
-            - BITENEX_API_BASE_URL=${BITENEX_API_BASE_URL}
-            - BITENEX_INTERNAL_API_KEY=${BITENEX_INTERNAL_API_KEY}
         volumes:
             - n8n_data:/home/node/.n8n
         restart: unless-stopped
-
-    sonarqube:
-        image: ${SONARQUBE_IMAGE:-sonarqube:lts-community}
-        container_name: bitenex-sonarqube
-        restart: unless-stopped
-        depends_on:
-            db:
-                condition: service_healthy
-        ports:
-            - "${SONARQUBE_PORT:-9000}:9000"
-        env_file:
-            - .env.docker
-        volumes:
-            - sonarqube_data:/opt/sonarqube/data
-            - sonarqube_extensions:/opt/sonarqube/extensions
-            - sonarqube_logs:/opt/sonarqube/logs
-        ulimits:
-            nofile:
-                soft: 65536
-                hard: 65536
-        networks:
-            - bitenex-network
 
     pgadmin:
         image: dpage/pgadmin4:8
@@ -135,9 +109,3 @@ volumes:
         name: bitenex-pgadmin-data
     n8n_data:
         name: bitenex-n8n-data
-    sonarqube_data:
-        name: bitenex-sonarqube-data
-    sonarqube_extensions:
-        name: bitenex-sonarqube-extensions
-    sonarqube_logs:
-        name: bitenex-sonarqube-logs
