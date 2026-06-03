@@ -50,6 +50,27 @@ class ConnectionManager:
 
         logger.info(f"User {user_id} disconnected from WebSocket")
 
+    def _remove_connection(
+        self,
+        websocket: WebSocket,
+        user_id: str,
+    ) -> None:
+        """Remove a stale socket without relying on a disconnect frame."""
+        if user_id not in self._connections:
+            return
+
+        if websocket in self._connections[user_id]:
+            self._connections[user_id].remove(websocket)
+
+        if self._connections[user_id]:
+            return
+
+        del self._connections[user_id]
+        for room in list(self._rooms):
+            self._rooms[room].discard(user_id)
+            if not self._rooms[room]:
+                del self._rooms[room]
+
     async def send_personal(
         self,
         user_id: str,
@@ -68,25 +89,26 @@ class ConnectionManager:
 
         if "event" in message:
             frame = f'42{_json.dumps([message["event"], message.get("data", {})])}'
-            for websocket in self._connections[user_id]:
+            for websocket in list(self._connections.get(user_id, [])):
                 try:
                     await websocket.send_text(frame)
                 except Exception as e:
                     logger.error(f"Failed to send SIO event to {user_id}: {e}")
+                    self._remove_connection(websocket, user_id)
         else:
-            for websocket in self._connections[user_id]:
+            for websocket in list(self._connections.get(user_id, [])):
                 try:
                     await websocket.send_json(message)
                 except Exception as e:
                     logger.error(f"Failed to send message to {user_id}: {e}")
-
+                    self._remove_connection(websocket, user_id)
 
     async def broadcast(
         self,
         message: dict[str, Any],
     ) -> None:
         """Broadcast a message to all connected users."""
-        for user_id in self._connections:
+        for user_id in list(self._connections):
             await self.send_personal(user_id, message)
 
     def join_room(self, user_id: str, room: str) -> None:
@@ -114,7 +136,7 @@ class ConnectionManager:
         if room not in self._rooms:
             return
 
-        for user_id in self._rooms[room]:
+        for user_id in list(self._rooms[room]):
             if user_id != exclude_user:
                 await self.send_personal(user_id, message)
 
