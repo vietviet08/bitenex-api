@@ -17,7 +17,7 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: '0.25'
           memory: 256M
@@ -100,80 +100,12 @@ services:
       - .env.docker
     ports:
       - "${PGADMIN_BIND_ADDRESS:-127.0.0.1}:${PGADMIN_PORT:-5050}:80"
-    depends_on:
-      sonarqube-db:
-        condition: service_healthy
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ./deploy/pgadmin/servers.json:/pgadmin4/servers.json:ro
       - ./deploy/pgadmin/pgpassfile:/pgpassfile:ro
     networks:
       - bitenex-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  sonarqube-db:
-    image: postgres:16-alpine
-    container_name: bitenex-sonarqube-db
-    restart: always
-    env_file:
-      - .env.docker
-    environment:
-      POSTGRES_DB: ${SONARQUBE_POSTGRES_DB:-sonarqube}
-      POSTGRES_USER: ${SONARQUBE_POSTGRES_USER:-sonarqube}
-      POSTGRES_PASSWORD: ${SONARQUBE_POSTGRES_PASSWORD:-sonarqube}
-    expose:
-      - "5432"
-    volumes:
-      - sonarqube_postgres_data:/var/lib/postgresql/data
-    networks:
-      - bitenex-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${SONARQUBE_POSTGRES_USER:-sonarqube} -d ${SONARQUBE_POSTGRES_DB:-sonarqube}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  sonarqube:
-    image: ${SONARQUBE_IMAGE:-sonarqube:lts-community}
-    container_name: bitenex-sonarqube
-    restart: always
-    env_file:
-      - .env.docker
-    depends_on:
-      sonarqube-db:
-        condition: service_healthy
-    ports:
-      - "${SONARQUBE_BIND_ADDRESS:-127.0.0.1}:${SONARQUBE_PORT:-9000}:9000"
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_extensions:/opt/sonarqube/extensions
-      - sonarqube_logs:/opt/sonarqube/logs
-    networks:
-      - bitenex-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
     logging:
       driver: "json-file"
       options:
@@ -192,11 +124,3 @@ volumes:
     name: bitenex-n8n-data
   pgadmin_data:
     name: bitenex-pgadmin-data
-  sonarqube_postgres_data:
-    name: bitenex-sonarqube-postgres-data
-  sonarqube_data:
-    name: bitenex-sonarqube-data
-  sonarqube_extensions:
-    name: bitenex-sonarqube-extensions
-  sonarqube_logs:
-    name: bitenex-sonarqube-logs
