@@ -19,12 +19,11 @@ import logging
 import re
 from typing import List, Optional, Tuple
 
-import httpx
-from openai import AsyncOpenAI, OpenAIError
+from openai import OpenAIError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.modules.admin.ai_settings import create_ai_client, get_ai_runtime_settings
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.search.schemas import (
     IndexingResponse,
@@ -33,13 +32,10 @@ from app.modules.search.schemas import (
 )
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # ---------------------------------------------------------------------------
 # OpenAI / Proxy LLM client
 # ---------------------------------------------------------------------------
-
-_openai_client: Optional[AsyncOpenAI] = None
 
 _LLM_TIMEOUT = 25  # seconds
 
@@ -56,40 +52,27 @@ Rules:
 - Include both specific and general terms"""
 
 
-def _get_llm_client() -> Optional[AsyncOpenAI]:
-    """Return a lazily-initialized AsyncOpenAI client configured for the proxy."""
-    global _openai_client
-    if _openai_client is None:
-        if not settings.openai_api_key:
-            logger.warning("[SemanticSearch] OPENAI_API_KEY not configured — will use keyword fallback")
-            return None
-        _openai_client = AsyncOpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
-            http_client=httpx.AsyncClient(timeout=_LLM_TIMEOUT),
-        )
-    return _openai_client
-
-
 # ---------------------------------------------------------------------------
 # LLM Query Parser
 # ---------------------------------------------------------------------------
 
 
-async def parse_query_with_llm(query: str) -> Optional[dict]:
+async def parse_query_with_llm(db: AsyncSession, query: str) -> Optional[dict]:
     """
     Use LLM to parse a natural language food query into structured search terms.
 
     Returns dict with keys: keywords, food_types, food_attributes
     Returns None on failure (caller should fall back to simple ILIKE).
     """
-    client = _get_llm_client()
-    if client is None:
+    runtime_settings = await get_ai_runtime_settings(db)
+    if runtime_settings is None:
+        logger.warning("[SemanticSearch] AI settings not configured - will use keyword fallback")
         return None
+    client = create_ai_client(runtime_settings, _LLM_TIMEOUT)
 
     try:
         response = await client.chat.completions.create(
-            model=settings.openai_chat_model,
+            model=runtime_settings.chat_model,
             messages=[
                 {"role": "system", "content": _QUERY_PARSER_SYSTEM},
                 {"role": "user", "content": f'Query: "{query}"'},
@@ -386,7 +369,7 @@ async def semantic_search(
         (results, used_fallback)
     """
     # Step 1: Try LLM parsing
-    parsed = await parse_query_with_llm(query)
+    parsed = await parse_query_with_llm(db, query)
     used_fallback = parsed is None
 
     food_results: List[SemanticSearchResult] = []

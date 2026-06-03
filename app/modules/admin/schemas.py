@@ -52,6 +52,42 @@ class SystemConfigUpdate(BaseDTO):
     description: str | None = None
 
 
+class AISettingsResponse(BaseDTO):
+    """OpenAI-compatible provider settings for AI features."""
+
+    api_key_configured: bool
+    api_key_masked: str | None = None
+    base_url: str | None = None
+    chat_model: str | None = None
+
+
+class AISettingsUpdate(BaseDTO):
+    """Update OpenAI-compatible provider settings."""
+
+    api_key: str | None = None
+    base_url: str
+    chat_model: str
+
+
+class AIModelListRequest(BaseDTO):
+    """Request available models from an OpenAI-compatible provider."""
+
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class AIModelItem(BaseDTO):
+    """Model returned by an OpenAI-compatible provider."""
+
+    id: str
+
+
+class AIModelListResponse(BaseDTO):
+    """Available model list response."""
+
+    models: list[AIModelItem]
+
+
 class UserStatsResponse(BaseDTO):
     """User statistics response."""
 
