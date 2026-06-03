@@ -23,7 +23,11 @@ from openai import OpenAIError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.admin.ai_settings import create_ai_client, get_ai_runtime_settings
+from app.modules.admin.ai_settings import (
+    create_ai_client,
+    create_chat_completion_with_retry,
+    get_ai_runtime_settings,
+)
 from app.modules.merchant.models import MenuItem, Merchant
 from app.modules.search.schemas import (
     IndexingResponse,
@@ -71,7 +75,8 @@ async def parse_query_with_llm(db: AsyncSession, query: str) -> Optional[dict]:
     client = create_ai_client(runtime_settings, _LLM_TIMEOUT)
 
     try:
-        response = await client.chat.completions.create(
+        response = await create_chat_completion_with_retry(
+            client,
             model=runtime_settings.chat_model,
             messages=[
                 {"role": "system", "content": _QUERY_PARSER_SYSTEM},

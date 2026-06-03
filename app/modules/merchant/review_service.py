@@ -18,7 +18,11 @@ from openai import OpenAIError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.admin.ai_settings import create_ai_client, get_ai_runtime_settings
+from app.modules.admin.ai_settings import (
+    create_ai_client,
+    create_chat_completion_with_retry,
+    get_ai_runtime_settings,
+)
 from app.modules.merchant.models import Merchant, MerchantReview, MerchantReviewSummaryCache
 from app.modules.merchant.schemas import (
     ReviewListResponse,
@@ -87,7 +91,8 @@ async def _call_llm_summarize(
     )
 
     try:
-        response = await client.chat.completions.create(
+        response = await create_chat_completion_with_retry(
+            client,
             model=runtime_settings.chat_model,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},

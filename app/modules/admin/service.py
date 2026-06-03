@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ExternalServiceError, ValidationError
+from app.modules.admin.ai_settings import run_ai_request_with_retry
 from app.modules.admin.models import AdminAuditLog, SystemConfig
 from app.modules.admin.schemas import (
     AIModelItem,
@@ -578,8 +579,12 @@ class AdminService:
                 api_key=resolved_api_key,
                 base_url=resolved_base_url,
                 http_client=httpx.AsyncClient(timeout=20),
+                max_retries=0,
             )
-            model_list = await client.models.list()
+            model_list = await run_ai_request_with_retry(
+                client.models.list,
+                operation_name="list models",
+            )
             models = sorted(
                 [AIModelItem(id=model.id) for model in model_list.data if model.id],
                 key=lambda item: item.id,
